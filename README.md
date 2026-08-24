@@ -3,6 +3,28 @@
 A local-first Omarchy 4 typing test by LeoMoon Studios with English and Parsi
 passages, timed tests, detailed error analysis, and history.
 
+## Preview
+
+**Typing test**
+
+![English typing test in progress](preview.png)
+
+**Statistics popout**
+
+![Typing test statistics popout](preview1.png)
+
+**Detailed results**
+
+![Completed typing test results and coaching](preview2.png)
+
+**Progress**
+
+![Typing progress charts](preview3.png)
+
+**History**
+
+![Typing test history](preview4.png)
+
 ## Features
 
 - Omarchy bar widget with latest WPM, personal best, accuracy, and test count
@@ -22,6 +44,15 @@ passages, timed tests, detailed error analysis, and history.
 - Bundled Vazirmatn font for consistent English and Parsi rendering
 - No accounts, telemetry, or network requests
 
+## Test Content
+
+| Language | Categories |
+| --- | --- |
+| English | Common, Literature, Programming, Numbers & punctuation, Difficult-character practice, Imported, Mixed |
+| Parsi | Common, Formal, Literature, Numbers & punctuation, Difficult-character practice, Imported, Mixed |
+
+Standard tests support Easy, Medium, Hard, and Mixed difficulty levels.
+
 ## Requirements
 
 - Omarchy 4
@@ -32,7 +63,7 @@ passages, timed tests, detailed error analysis, and history.
 Once this repository is published, install it with:
 
 ```bash
-omarchy plugin add <repository-url> --enable
+omarchy plugin add https://github.com/leomoon-studios/omarchy-typing-test.git --enable
 ```
 
 Omarchy installs the repository into:
