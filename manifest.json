@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "leomoon-studios.omarchy-typing-test",
+  "name": "Omarchy Typing Test",
+  "version": "0.2.0",
+  "author": "LeoMoon Studios",
+  "description": "A bilingual adaptive typing test with local coaching, progress charts, and difficult-character analysis.",
+  "kinds": [
+    "bar-widget",
+    "panel"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "panel": "TypingTestPanel.qml"
+  },
+  "barWidget": {
+    "displayName": "Typing Test",
+    "description": "Typing statistics and test launcher",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

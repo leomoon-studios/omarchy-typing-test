@@ -1,0 +1,323 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import qs.Ui
+import "components"
+import "js/AdaptivePractice.js" as AdaptivePractice
+
+Item {
+  id: root
+
+  property var shell: null
+  property var manifest: null
+  property bool opened: false
+  property string currentView: "setup"
+  property var activeOptions: ({})
+  property var currentResult: null
+  property string confirmationAction: ""
+
+  readonly property string pluginId: "leomoon-studios.omarchy-typing-test"
+  readonly property string contentFontFamily: bundledFont.name !== ""
+    ? bundledFont.name
+    : Style.font.family
+  readonly property string pluginDir: manifest && manifest.__sourceDir
+    ? String(manifest.__sourceDir)
+    : String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
+
+  FontLoader {
+    id: bundledFont
+    source: Qt.resolvedUrl("assets/fonts/Vazirmatn-Regular.ttf")
+  }
+
+  function open(payloadJson) {
+    var payload = {}
+    try { payload = JSON.parse(payloadJson || "{}") || {} } catch (error) {}
+    var requested = String(payload.view || "setup")
+    currentView = ["setup", "progress", "history", "settings"].indexOf(requested) >= 0 ? requested : "setup"
+    opened = true
+    Qt.callLater(function() {
+      if (viewLoader.item && typeof viewLoader.item.forceActiveFocus === "function") viewLoader.item.forceActiveFocus()
+    })
+  }
+
+  function close() {
+    opened = false
+    confirmationAction = ""
+  }
+
+  function dismiss() {
+    if (shell && typeof shell.hide === "function") shell.hide((manifest && manifest.id) || pluginId)
+    else close()
+  }
+
+  function requestDismiss() {
+    if (currentView === "test" && viewLoader.item && viewLoader.item.hasTyped) {
+      confirmationAction = "dismiss"
+      confirmDialog.message = "Discard the active typing test?"
+      confirmDialog.confirmText = "Discard"
+      confirmDialog.defaultSelectedIndex = 0
+      confirmDialog.opened = true
+    } else {
+      dismiss()
+    }
+  }
+
+  function requestRestart() {
+    if (currentView !== "test") return
+    if (viewLoader.item && viewLoader.item.hasTyped) {
+      confirmationAction = "restart"
+      confirmDialog.message = "Restart this typing test?"
+      confirmDialog.confirmText = "Restart"
+      confirmDialog.defaultSelectedIndex = 1
+      confirmDialog.opened = true
+    } else if (viewLoader.item) {
+      viewLoader.item.start(activeOptions)
+    }
+  }
+
+  function handleConfirmationKey(event) {
+    return confirmDialog.opened && confirmDialog.handleDialogKey(event)
+  }
+
+  function confirmAction() {
+    confirmDialog.opened = false
+    if (confirmationAction === "dismiss") dismiss()
+    else if (confirmationAction === "restart" && viewLoader.item) viewLoader.item.start(activeOptions)
+    confirmationAction = ""
+  }
+
+  function startTest(options) {
+    activeOptions = options
+    currentView = "test"
+  }
+
+  function startAdaptive(language, durationSeconds) {
+    var selectedLanguage = language === "fa" ? "fa" : "en"
+    var analysis = AdaptivePractice.rankTargets(dataStore.history, selectedLanguage, dataStore.settings)
+    if (!analysis.available) {
+      currentView = "setup"
+      return
+    }
+    startTest({
+      language: selectedLanguage,
+      durationSeconds: Math.max(15, Number(durationSeconds || 60)),
+      category: "mixed",
+      difficulty: "mixed",
+      mode: "adaptive",
+      adaptiveTargets: analysis.characters,
+      recentPassageIds: AdaptivePractice.recentPassageIds(dataStore.history, selectedLanguage, 3)
+    })
+  }
+
+  function finishTest(result) {
+    currentResult = result
+    dataStore.appendResult(result)
+    currentView = "results"
+  }
+
+  function showHistoricalResult(result) {
+    currentResult = result
+    activeOptions = {
+      language: result.language || "en",
+      durationSeconds: Number(result.configuredDurationSeconds || 60),
+      category: result.category || "common",
+      difficulty: result.difficulty || "mixed",
+      mode: result.mode || "standard",
+      adaptiveTargets: result.adaptiveTargets || [],
+      recentPassageIds: AdaptivePractice.recentPassageIds(dataStore.history, result.language || "en", 3)
+    }
+    currentView = "results"
+  }
+
+  DataStore { id: dataStore }
+  PassageLibrary {
+    id: passageLibrary
+    pluginDir: root.pluginDir
+    customEnglishText: dataStore.customEnglishText
+    customPersianText: dataStore.customPersianText
+  }
+
+  Component {
+    id: setupComponent
+    SetupView {
+      store: dataStore
+      library: passageLibrary
+      fontFamily: root.contentFontFamily
+      onStartRequested: function(options) { root.startTest(options) }
+      onNavigateRequested: function(view) { root.currentView = view }
+    }
+  }
+
+  Component {
+    id: testComponent
+    TestView {
+      store: dataStore
+      library: passageLibrary
+      fontFamily: root.contentFontFamily
+      confirmationKeyHandler: function(event) { return root.handleConfirmationKey(event) }
+      onCompleted: function(result) { root.finishTest(result) }
+      onCancelRequested: root.requestDismiss()
+      onRestartRequested: root.requestRestart()
+    }
+  }
+
+  Component {
+    id: resultsComponent
+    ResultsView {
+      result: root.currentResult
+      store: dataStore
+      fontFamily: root.contentFontFamily
+      onRepeatRequested: root.startTest(root.activeOptions)
+      onNewTestRequested: root.currentView = "setup"
+      onHistoryRequested: root.currentView = "history"
+      onProgressRequested: root.currentView = "progress"
+      onPracticeRequested: root.startAdaptive(root.currentResult ? root.currentResult.language : "en",
+        Math.min(180, root.currentResult ? Number(root.currentResult.configuredDurationSeconds || 60) : 60))
+    }
+  }
+
+  Component {
+    id: progressComponent
+    ProgressView {
+      store: dataStore
+      fontFamily: root.contentFontFamily
+      onBackRequested: root.currentView = "setup"
+      onHistoryRequested: root.currentView = "history"
+      onResultRequested: function(result) { root.showHistoricalResult(result) }
+    }
+  }
+
+  Component {
+    id: historyComponent
+    HistoryView {
+      store: dataStore
+      fontFamily: root.contentFontFamily
+      onBackRequested: root.currentView = "setup"
+      onProgressRequested: root.currentView = "progress"
+      onResultRequested: function(result) { root.showHistoricalResult(result) }
+    }
+  }
+
+  Component {
+    id: settingsComponent
+    SettingsView {
+      store: dataStore
+      fontFamily: root.contentFontFamily
+      onBackRequested: root.currentView = "setup"
+    }
+  }
+
+  PanelWindow {
+    id: panel
+    visible: root.opened
+    anchors { top: true; bottom: true; left: true; right: true }
+    color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.namespace: "leomoon-studios-typing-test"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+
+    Rectangle {
+      anchors.fill: parent
+      color: Color.menu.scrim
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.requestDismiss()
+      }
+    }
+
+    BorderSurface {
+      id: card
+      width: Math.min(Style.space(960), Math.max(Style.space(320), panel.width - Style.space(80)))
+      height: Math.min(Style.space(640), Math.max(Style.space(420), panel.height - Style.space(80)))
+      anchors.centerIn: parent
+      color: Color.menu.background
+      borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.normalBorderWidth))
+      radius: Style.cornerRadius
+      padding: Style.spacing.panelPadding
+
+      MouseArea { anchors.fill: parent; onClicked: {} }
+
+      ColumnLayout {
+        anchors.fill: parent
+        anchors.topMargin: card.contentTopInset
+        anchors.rightMargin: card.contentRightInset
+        anchors.bottomMargin: card.contentBottomInset
+        anchors.leftMargin: card.contentLeftInset
+        spacing: Style.spacing.md
+
+        RowLayout {
+          Layout.fillWidth: true
+          visible: root.currentView !== "test"
+          Text {
+            text: "OMARCHY TYPING TEST"
+            color: Color.muted
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            font.letterSpacing: 1.5
+            Layout.fillWidth: true
+          }
+          PanelActionButton { iconText: "×"; tooltipText: "Close"; fontFamily: root.contentFontFamily; focusable: true; onClicked: root.requestDismiss() }
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          visible: root.currentView !== "test" && dataStore.lastError !== ""
+          spacing: Style.spacing.sm
+
+          Text {
+            text: dataStore.lastError
+            color: Color.urgent
+            font.family: root.contentFontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+          }
+
+          PanelActionButton {
+            iconText: "×"
+            tooltipText: "Dismiss warning"
+            fontFamily: root.contentFontFamily
+            focusable: true
+            onClicked: dataStore.clearError()
+          }
+        }
+
+        Loader {
+          id: viewLoader
+          Layout.fillWidth: true
+          Layout.fillHeight: true
+          sourceComponent: root.currentView === "test" ? testComponent
+            : root.currentView === "results" ? resultsComponent
+            : root.currentView === "progress" ? progressComponent
+            : root.currentView === "history" ? historyComponent
+            : root.currentView === "settings" ? settingsComponent
+            : setupComponent
+          onLoaded: {
+            if (root.currentView === "test" && item) item.start(root.activeOptions)
+          }
+        }
+      }
+
+      KeyboardConfirmDialog {
+        id: confirmDialog
+        fontFamily: root.contentFontFamily
+        anchors.fill: parent
+        restoreFocusItem: viewLoader.item
+        onCanceled: { opened = false; root.confirmationAction = "" }
+        onConfirmed: root.confirmAction()
+      }
+    }
+
+    Item {
+      anchors.fill: parent
+      focus: root.opened
+      Keys.priority: Keys.AfterItem
+      Keys.onEscapePressed: root.requestDismiss()
+    }
+  }
+}
