@@ -467,8 +467,14 @@ assert.match(barWidgetSource, /id:\s*badge/u, "WPM monogram must retain its badg
 assert.equal(manifest.barWidget.schema, undefined, "icon-only widget should not expose obsolete settings");
 const dataStoreSource = fs.readFileSync(path.join(root, "DataStore.qml"), "utf8");
 assert.match(dataStoreSource, /onSaveFailed/u, "persistence writes must surface failures");
+assert.doesNotMatch(dataStoreSource, /FileView\s*\{/u, "persistent data must not use unbounded FileView reads");
+assert.doesNotMatch(dataStoreSource, /\bstat\b/u, "imports must not use a check-then-open stat process");
 assert.match(dataStoreSource, /history-backup\.jsonl/u, "destructive history changes must create a backup");
 assert.match(dataStoreSource, /history-recovery\.jsonl/u, "malformed history must create a recovery snapshot");
+const safeFileSource = fs.readFileSync(path.join(root, "scripts", "safe-file.py"), "utf8");
+assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink swaps");
+assert.match(safeFileSource, /os\.fstat\(fd\)/u, "safe file reads must inspect the opened descriptor");
+assert.match(safeFileSource, /MAX_BYTES/u, "safe file reads must enforce a byte limit");
 const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml"), "utf8");
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");

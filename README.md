@@ -57,6 +57,7 @@ Standard tests support Easy, Medium, Hard, and Mixed difficulty levels.
 
 - Omarchy 4
 - The standard `omarchy-shell` packages included with Omarchy
+- Python 3 (used for descriptor-bound local data reads and atomic writes)
 
 ## Install
 

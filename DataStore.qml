@@ -32,8 +32,6 @@ QtObject {
   property string importPath: ""
   property string pendingPickerOutput: ""
   property bool pickerExited: false
-  property string verifyOutput: ""
-  property bool verifyExited: false
 
   signal importFinished(int count, string collection)
   signal importFailed(string message)
@@ -211,21 +209,6 @@ QtObject {
 
   function maybeVerifyImport() {
     if (!pickerExited || !pendingPickerOutput) return
-    verifyOutput = ""
-    verifyExited = false
-    verifier.command = ["env", "LC_ALL=C", "stat", "--format=%F|%s", "--", pendingPickerOutput]
-    verifier.running = true
-  }
-
-  function maybeLoadVerifiedImport() {
-    if (!verifyExited || !verifyOutput) return
-    var separator = verifyOutput.lastIndexOf("|")
-    if (separator < 0) { importFailed("The selected file could not be inspected."); return }
-    var kind = verifyOutput.slice(0, separator)
-    var size = Number(verifyOutput.slice(separator + 1))
-    if (kind.indexOf("symbolic link") >= 0) { importFailed("Symbolic links cannot be imported."); return }
-    if (kind.indexOf("regular file") < 0) { importFailed("The selected path is not a regular file."); return }
-    if (!isFinite(size) || size > 10 * 1024 * 1024) { importFailed("Text imports are limited to 10 MiB."); return }
     importPath = pendingPickerOutput
     Qt.callLater(function() { importFile.reload() })
   }
@@ -290,108 +273,86 @@ QtObject {
     }
   }
 
-  property FileView settingsFileView: FileView {
+  property SafeFile settingsFileView: SafeFile {
     id: settingsFile
     path: root.configDir + "/settings.json"
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadSettings(text())
+    onLoaded: function(value) { root.loadSettings(value) }
     onLoadFailed: function(error) {
-      if (error === FileViewError.FileNotFound) {
+      if (error === "File not found") {
         root.settingsWritable = true
         root.loadSettings("{}")
       } else {
         root.settingsWritable = false
-        root.reportError(root.fileError("The settings file could not be read", error))
+        root.reportError("The settings file could not be read safely.")
       }
     }
-    onSaveFailed: function(error) { root.reportError(root.fileError("Settings could not be saved", error)) }
-    onFileChanged: reload()
+    onSaveFailed: root.reportError("Settings could not be saved safely.")
   }
 
-  property FileView historyFileView: FileView {
+  property SafeFile historyFileView: SafeFile {
     id: historyFile
     path: root.dataDir + "/history.jsonl"
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadHistory(text())
+    onLoaded: function(value) { root.loadHistory(value) }
     onLoadFailed: function(error) {
-      if (error === FileViewError.FileNotFound) {
+      if (error === "File not found") {
         root.historyWritable = true
         root.loadHistory("")
       } else {
         root.historyWritable = false
-        root.reportError(root.fileError("The history file could not be read", error))
+        root.reportError("The history file could not be read safely.")
       }
     }
-    onSaveFailed: function(error) { root.reportError(root.fileError("History could not be saved", error)) }
-    onFileChanged: reload()
+    onSaveFailed: root.reportError("History could not be saved safely.")
   }
 
-  property FileView customEnFileView: FileView {
+  property SafeFile customEnFileView: SafeFile {
     id: customEnFile
     path: root.customDir + "/custom-en.jsonl"
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: { root.customEnglishWritable = true; root.customEnglishText = text() }
+    onLoaded: function(value) { root.customEnglishWritable = true; root.customEnglishText = value }
     onLoadFailed: function(error) {
-      if (error === FileViewError.FileNotFound) {
+      if (error === "File not found") {
         root.customEnglishWritable = true
         root.customEnglishText = ""
       } else {
         root.customEnglishWritable = false
-        root.reportError(root.fileError("English imported passages could not be read", error))
+        root.reportError("English imported passages could not be read safely.")
       }
     }
-    onSaveFailed: function(error) { root.reportError(root.fileError("English imported passages could not be saved", error)) }
-    onFileChanged: reload()
+    onSaveFailed: root.reportError("English imported passages could not be saved safely.")
   }
 
-  property FileView customFaFileView: FileView {
+  property SafeFile customFaFileView: SafeFile {
     id: customFaFile
     path: root.customDir + "/custom-fa.jsonl"
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: { root.customPersianWritable = true; root.customPersianText = text() }
+    onLoaded: function(value) { root.customPersianWritable = true; root.customPersianText = value }
     onLoadFailed: function(error) {
-      if (error === FileViewError.FileNotFound) {
+      if (error === "File not found") {
         root.customPersianWritable = true
         root.customPersianText = ""
       } else {
         root.customPersianWritable = false
-        root.reportError(root.fileError("Parsi imported passages could not be read", error))
+        root.reportError("Parsi imported passages could not be read safely.")
       }
     }
-    onSaveFailed: function(error) { root.reportError(root.fileError("Parsi imported passages could not be saved", error)) }
-    onFileChanged: reload()
+    onSaveFailed: root.reportError("Parsi imported passages could not be saved safely.")
   }
 
-  property FileView historyBackupFileView: FileView {
+  property SafeFile historyBackupFileView: SafeFile {
     id: historyBackupFile
     path: root.dataDir + "/history-backup.jsonl"
-    atomicWrites: true
-    printErrors: false
-    onSaveFailed: function(error) { root.reportError(root.fileError("The history backup could not be saved", error)) }
+    onSaveFailed: root.reportError("The history backup could not be saved safely.")
   }
 
-  property FileView historyRecoveryFileView: FileView {
+  property SafeFile historyRecoveryFileView: SafeFile {
     id: historyRecoveryFile
     path: root.dataDir + "/history-recovery.jsonl"
-    atomicWrites: true
-    printErrors: false
-    onSaveFailed: function(error) { root.reportError(root.fileError("The history recovery snapshot could not be saved", error)) }
+    onSaveFailed: root.reportError("The history recovery snapshot could not be saved safely.")
   }
 
-  property FileView settingsRecoveryFileView: FileView {
+  property SafeFile settingsRecoveryFileView: SafeFile {
     id: settingsRecoveryFile
     path: root.configDir + "/settings-recovery.json"
-    atomicWrites: true
-    printErrors: false
-    onSaveFailed: function(error) { root.reportError(root.fileError("The settings recovery snapshot could not be saved", error)) }
+    onSaveFailed: root.reportError("The settings recovery snapshot could not be saved safely.")
   }
 
   property Process pickerProcess: Process {
@@ -411,27 +372,10 @@ QtObject {
     }
   }
 
-  property Process verifierProcess: Process {
-    id: verifier
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.verifyOutput = String(text || "").trim()
-        root.maybeLoadVerifiedImport()
-      }
-    }
-    onExited: function(exitCode) {
-      if (exitCode !== 0) { root.importFailed("The selected file could not be inspected."); return }
-      root.verifyExited = true
-      root.maybeLoadVerifiedImport()
-    }
-  }
-
-  property FileView importFileView: FileView {
+  property SafeFile importFileView: SafeFile {
     id: importFile
     path: root.importPath
-    printErrors: false
-    onLoaded: root.finishImport(text())
-    onLoadFailed: function(error) { root.importFailed(root.fileError("The selected file could not be read as UTF-8 text", error)) }
+    onLoaded: function(value) { root.finishImport(value) }
+    onLoadFailed: function(error) { root.importFailed("The selected file could not be read safely as UTF-8 text.") }
   }
 }
