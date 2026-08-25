@@ -31,7 +31,7 @@ QtObject {
     writer.running = true
   }
 
-  Process {
+  property Process readerProc: Process {
     id: reader
     stdout: StdioCollector {
       waitForEnd: true
@@ -43,7 +43,7 @@ QtObject {
     }
   }
 
-  Process {
+  property Process writerProc: Process {
     id: writer
     stdinEnabled: true
     onStarted: write(root.pendingText)
