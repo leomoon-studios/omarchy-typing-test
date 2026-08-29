@@ -443,7 +443,7 @@ assert.equal(Progress.metricPoints(largeRows, "netWpm", 120).length, 120);
 
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "leomoon-studios.omarchy-typing-test");
-assert.equal(manifest.version, "0.2.0");
+assert.equal(manifest.version, "0.2.2");
 assert.deepEqual(manifest.kinds, ["bar-widget", "panel"]);
 for (const entryPoint of Object.values(manifest.entryPoints)) {
   assert.equal(fs.existsSync(path.join(root, entryPoint)), true, `missing entry point ${entryPoint}`);
