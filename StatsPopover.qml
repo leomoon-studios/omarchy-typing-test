@@ -19,8 +19,10 @@ Panel {
     property int selectedAction: 0
     readonly property var latest: store.latest()
     readonly property string activeLanguage: String(store.settings.defaultLanguage || "en")
-    readonly property var bestWpm: store.best(activeLanguage)
-    readonly property var averageAccuracy: store.averageAccuracy(activeLanguage)
+    readonly property int comparisonDuration: Number(store.settings.defaultDurationSeconds || 60)
+    readonly property var comparisonScope: ({ durationSeconds: comparisonDuration, mode: "standard" })
+    readonly property var bestWpm: store.best(activeLanguage, comparisonScope)
+    readonly property var averageAccuracy: store.averageAccuracy(activeLanguage, comparisonScope)
     FontLoader {
         id: bundledFont
         source: Qt.resolvedUrl("assets/fonts/Vazirmatn-Regular.ttf")
@@ -51,6 +53,17 @@ Panel {
     function selectAction(index) {
         cursorActive = true;
         selectedAction = Math.max(0, Math.min(3, Number(index)));
+    }
+
+    function compactDuration(seconds) {
+        var value = Math.max(15, Math.round(Number(seconds) || 60));
+        if (value < 60) return value + "s";
+        if (value % 60 === 0) return (value / 60) + "m";
+        return Math.floor(value / 60) + "m" + (value % 60) + "s";
+    }
+
+    function comparisonLabel() {
+        return (activeLanguage === "fa" ? "PA" : "EN") + " · " + compactDuration(comparisonDuration) + " STD";
     }
 
     function moveVertical(direction) {
@@ -228,7 +241,7 @@ Panel {
                         }
 
                         Text {
-                            text: root.activeLanguage === "fa" ? "Best (Parsi)" : "Best (EN)"
+                            text: "Best (" + root.comparisonLabel() + ")"
                             color: root.contentForeground
                             opacity: 0.55
                             font.family: root.contentFontFamily
@@ -248,7 +261,7 @@ Panel {
                         }
 
                         Text {
-                            text: "Accuracy"
+                            text: "Avg accuracy (" + root.comparisonLabel() + ")"
                             color: root.contentForeground
                             opacity: 0.55
                             font.family: root.contentFontFamily

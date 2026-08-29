@@ -34,7 +34,20 @@ Item {
   }
 
   function optionLabel(value) {
-    return String(value || "mixed").replace(/[-_]/g, " ").toUpperCase()
+    var option = String(value || "mixed")
+    if (option === "1") return "EASY"
+    if (option === "2") return "MEDIUM"
+    if (option === "3") return "HARD"
+    return option.replace(/[-_]/g, " ").toUpperCase()
+  }
+
+  function displayCharacter(value) {
+    var character = value === undefined || value === null ? "" : String(value)
+    if (character === "") return "∅"
+    if (character === " ") return "Space"
+    if (character === "\t") return "Tab"
+    if (character === "\n") return "Enter"
+    return character
   }
 
   function sourceCharacterStats(value) {
@@ -298,7 +311,10 @@ Item {
                 var rows = root.value("substitutions", [])
                 if (!rows.length) return "No substitutions recorded."
                 var values = []
-                for (var i = 0; i < Math.min(8, rows.length); i++) values.push(rows[i].expected + " → " + rows[i].actual + "  ×" + rows[i].count)
+                for (var i = 0; i < Math.min(8, rows.length); i++) {
+                  values.push(root.displayCharacter(rows[i].expected) + " → "
+                    + root.displayCharacter(rows[i].actual) + "  ×" + rows[i].count)
+                }
                 return values.join("     ")
               }
               color: Color.foreground

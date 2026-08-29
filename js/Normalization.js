@@ -40,3 +40,7 @@ function normalizeText(text, options) {
   for (var i = 0; i < chars.length; i++) result += normalizeCharacter(chars[i], options)
   return result
 }
+
+function normalizedCharacters(text, options) {
+  return characters(normalizeText(text, options))
+}

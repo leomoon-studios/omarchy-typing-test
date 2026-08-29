@@ -51,6 +51,7 @@ assert.equal(Normalization.normalizeCharacter("٤", { digitNormalization: "persi
 assert.equal(Normalization.normalizeCharacter("۴", { digitNormalization: "all" }), "4");
 assert.equal(Normalization.normalizeCharacter("\u200c", { zwnjCountsAsError: false }), "");
 assert.equal(Normalization.equivalent("ی", "ي", { persianNormalization: "forgiving" }), true);
+assert.deepEqual(Array.from(Normalization.normalizedCharacters("می‌روم", { zwnjCountsAsError: false })), Array.from("میروم"));
 
 const oneMinute = Metrics.calculate(250, 245, 5, 60, 42);
 assert.equal(oneMinute.grossWpm, 50);
@@ -60,6 +61,9 @@ assert.equal(oneMinute.accuracy, 98);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 50 }, { grossWpm: 50 }]), 100);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 52 }]), null);
 assert.equal(JSON.stringify(Metrics.evaluateFinal("یک", "يك", { persianNormalization: "forgiving" })), JSON.stringify({ correct: 2, incorrect: 0, entered: 2 }));
+assert.equal(JSON.stringify(Metrics.evaluateFinal("می‌روم", "میروم", { zwnjCountsAsError: false })), JSON.stringify({ correct: 5, incorrect: 0, entered: 5 }));
+assert.equal(JSON.stringify(Metrics.evaluateFinal("میروم", "می‌روم", { zwnjCountsAsError: false })), JSON.stringify({ correct: 5, incorrect: 0, entered: 5 }));
+assert.equal(JSON.stringify(Metrics.evaluateFinal("می‌روم", "میروم", { zwnjCountsAsError: true })), JSON.stringify({ correct: 2, incorrect: 3, entered: 5 }));
 
 assert.equal(Pagination.wordBoundaryEnd(Array.from("one two three"), 0, 9), 8);
 assert.equal(Pagination.wordBoundaryEnd(Array.from("one two three"), 8, 11), 11);
@@ -355,6 +359,24 @@ const progressSeven = Progress.filterHistory(progressNewest, "en", "7-tests");
 assert.equal(progressSeven.length, 7);
 assert.equal(progressSeven[0].id, "progress-4");
 assert.equal(progressSeven[6].id, "progress-10");
+const scopedProgress = [
+  { ...progressNewest[0], id: "scope-match", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "1" },
+  { ...progressNewest[1], id: "scope-duration", configuredDurationSeconds: 180, mode: "standard", category: "common", difficulty: "1" },
+  { ...progressNewest[2], id: "scope-mode", configuredDurationSeconds: 60, mode: "adaptive", category: "mixed", difficulty: "mixed" },
+  { ...progressNewest[3], id: "scope-category", configuredDurationSeconds: 60, mode: "standard", category: "literature", difficulty: "1" },
+  { ...progressNewest[4], id: "scope-difficulty", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "3" }
+];
+const exactScope = Progress.filterHistory(scopedProgress, "en", "all", {
+  durationSeconds: "60",
+  mode: "standard",
+  category: "common",
+  difficulty: "1"
+});
+assert.deepEqual(Array.from(exactScope, row => row.id), ["scope-match"]);
+assert.equal(Progress.filterHistory(scopedProgress, "en", "all", {
+  durationSeconds: "all", mode: "all", category: "all", difficulty: "all"
+}).length, 5);
+assert.deepEqual(Array.from(Progress.durationOptions(scopedProgress, "en", 300), row => row.value), ["all", "60", "180", "300"]);
 const progressSummary = Progress.summary(progressSeven);
 assert.equal(progressSummary.count, 7);
 assert.equal(progressSummary.currentWpm, 90);
@@ -392,6 +414,13 @@ assert.equal(coaching.messages.length <= 3, true);
 assert.equal(coaching.messages[0].kind, "substitution");
 assert.equal(coaching.messages.some(message => message.kind === "accuracy"), true);
 assert.equal(coaching.recommendation.mode, "adaptive");
+assert.equal(Coaching.comparableBaseline({
+  id: "strict-current", language: "en", configuredDurationSeconds: 60, mode: "standard"
+}, [
+  { id: "same", language: "en", configuredDurationSeconds: 60, mode: "standard" },
+  { id: "wrong-duration", language: "en", configuredDurationSeconds: 180, mode: "standard" },
+  { id: "wrong-mode", language: "en", configuredDurationSeconds: 60, mode: "adaptive" }
+]).length, 1);
 assert.deepEqual(JSON.parse(JSON.stringify(Coaching.summarize(null, [null], null))), {
   messages: [], baselineCount: 0, recommendation: null
 });
@@ -416,9 +445,9 @@ const adaptiveCoachingCurrent = {
   wpmSamples: []
 };
 const adaptiveCoachingHistory = [adaptiveCoachingCurrent,
-  { ...progressNewest[1], characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 5, totalErrors: 5 }] },
-  { ...progressNewest[2], characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 4, totalErrors: 4 }] },
-  { ...progressNewest[3], characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 4, totalErrors: 4 }] }
+  { ...progressNewest[1], mode: "adaptive", configuredDurationSeconds: adaptiveCoachingCurrent.configuredDurationSeconds, characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 5, totalErrors: 5 }] },
+  { ...progressNewest[2], mode: "adaptive", configuredDurationSeconds: adaptiveCoachingCurrent.configuredDurationSeconds, characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 4, totalErrors: 4 }] },
+  { ...progressNewest[3], mode: "adaptive", configuredDurationSeconds: adaptiveCoachingCurrent.configuredDurationSeconds, characterStats: [{ character: "e", opportunities: 12, firstAttemptErrors: 4, totalErrors: 4 }] }
 ];
 const adaptiveCoaching = Coaching.summarize(adaptiveCoachingCurrent, adaptiveCoachingHistory, englishTargets);
 assert.equal(adaptiveCoaching.messages.some(message => message.kind === "adaptive-target" && message.positive), true);
@@ -471,10 +500,17 @@ assert.doesNotMatch(dataStoreSource, /FileView\s*\{/u, "persistent data must not
 assert.doesNotMatch(dataStoreSource, /\bstat\b/u, "imports must not use a check-then-open stat process");
 assert.match(dataStoreSource, /history-backup\.jsonl/u, "destructive history changes must create a backup");
 assert.match(dataStoreSource, /history-recovery\.jsonl/u, "malformed history must create a recovery snapshot");
+assert.match(dataStoreSource, /customEnglishText\s*=\s*updated/u, "English imports must update the active passage library immediately");
+assert.match(dataStoreSource, /customPersianText\s*=\s*updated/u, "Parsi imports must update the active passage library immediately");
+assert.match(dataStoreSource, /function matchesScope/u, "personal-best and accuracy queries must support comparison scopes");
 const safeFileSource = fs.readFileSync(path.join(root, "scripts", "safe-file.py"), "utf8");
 assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink swaps");
 assert.match(safeFileSource, /os\.fstat\(fd\)/u, "safe file reads must inspect the opened descriptor");
 assert.match(safeFileSource, /MAX_BYTES/u, "safe file reads must enforce a byte limit");
+const safeFileQmlSource = fs.readFileSync(path.join(root, "SafeFile.qml"), "utf8");
+assert.match(safeFileQmlSource, /property bool hasQueuedWrite/u, "safe writes must retain a pending update");
+assert.match(safeFileQmlSource, /queuedText\s*=\s*nextText/u, "safe writes must coalesce to the latest pending value");
+assert.match(safeFileQmlSource, /continueQueuedWrite\(\)/u, "queued safe writes must continue after the active write exits");
 const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml"), "utf8");
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
@@ -483,6 +519,12 @@ assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recomme
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
 assert.match(testViewSource, /schemaVersion:\s*2/u, "new results must use schema version 2");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
+assert.match(testViewSource, /sourceValue\.replace\(\/\\u200c\/g/u, "typing input must remove ignored ZWNJs before positional comparison");
+const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
+assert.match(resultsViewSource, /if \(option === "1"\) return "EASY"/u, "results must label numeric difficulty values");
+assert.match(resultsViewSource, /if \(character === " "\) return "Space"/u, "results must label whitespace substitutions");
+const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
+assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
 for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);

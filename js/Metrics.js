@@ -47,12 +47,12 @@ function completedWordCount(expected, typedLength) {
 }
 
 function evaluateFinal(expected, typed, options) {
-  var expectedChars = Normalization.characters(expected)
-  var typedChars = Normalization.characters(typed)
+  var expectedChars = Normalization.normalizedCharacters(expected, options)
+  var typedChars = Normalization.normalizedCharacters(typed, options)
   var correct = 0
   var incorrect = 0
   for (var i = 0; i < typedChars.length; i++) {
-    if (i < expectedChars.length && Normalization.equivalent(expectedChars[i], typedChars[i], options)) correct++
+    if (i < expectedChars.length && expectedChars[i] === typedChars[i]) correct++
     else incorrect++
   }
   return { correct: correct, incorrect: incorrect, entered: typedChars.length }

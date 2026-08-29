@@ -152,8 +152,12 @@ Item {
 
   function syncText(value) {
     if (suppressInput) return
+    var sourceValue = String(value || "")
+    var comparableValue = store && store.settings.zwnjCountsAsError === false
+      ? sourceValue.replace(/\u200c/g, "")
+      : sourceValue
     var oldChars = Normalization.characters(typedText)
-    var newChars = Normalization.characters(value)
+    var newChars = Normalization.characters(comparableValue)
     var expectedChars = Normalization.characters(expectedText)
     var common = 0
     while (common < oldChars.length && common < newChars.length && oldChars[common] === newChars[common]) common++
@@ -204,7 +208,7 @@ Item {
     typedText = newChars.slice(0, expectedChars.length).join("")
     if (passagePageReady) updatePassagePage(false)
     else schedulePageLayout(true)
-    if (value !== typedText) {
+    if (sourceValue !== typedText) {
       suppressInput = true
       input.text = typedText
       input.cursorPosition = input.text.length
@@ -564,7 +568,6 @@ Item {
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
         focus: true
-        maximumLength: root.expectedText.length
         inputMethodHints: Qt.ImhNoPredictiveText
         onTextEdited: root.syncText(text)
         Keys.priority: Keys.BeforeItem

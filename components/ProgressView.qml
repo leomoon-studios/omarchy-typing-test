@@ -13,6 +13,11 @@ Item {
   property string fontFamily: Style.font.family
   property string language: store ? String(store.settings.defaultLanguage || "en") : "en"
   property string range: store ? String(store.settings.progressRange || "30-tests") : "30-tests"
+  property string durationFilter: store ? String(store.settings.defaultDurationSeconds || 60) : "60"
+  property string modeFilter: "standard"
+  property string categoryFilter: "all"
+  property string difficultyFilter: "all"
+  property var durationChoices: [{ value: "all", label: "All durations" }, { value: "60", label: "1 min" }]
   property var rows: []
   property var summary: ({ count: 0, currentWpm: null, wpmChange: null, accuracy: null, bestWpm: null })
   property var speedPoints: []
@@ -22,6 +27,27 @@ Item {
   property var characterChoices: []
   property string selectedCharacter: ""
   property var selectedCharacterPoints: []
+  readonly property var categoryChoices: language === "fa"
+    ? [
+        { value: "all", label: "All content" },
+        { value: "common", label: "Common" },
+        { value: "formal", label: "Formal" },
+        { value: "literature", label: "Literature" },
+        { value: "punctuation", label: "Numbers & punctuation" },
+        { value: "difficult", label: "Difficult-character practice" },
+        { value: "custom", label: "Imported" },
+        { value: "mixed", label: "Mixed" }
+      ]
+    : [
+        { value: "all", label: "All content" },
+        { value: "common", label: "Common" },
+        { value: "literature", label: "Literature" },
+        { value: "programming", label: "Programming" },
+        { value: "punctuation", label: "Numbers & punctuation" },
+        { value: "difficult", label: "Difficult-character practice" },
+        { value: "custom", label: "Imported" },
+        { value: "mixed", label: "Mixed" }
+      ]
 
   signal backRequested()
   signal historyRequested()
@@ -69,7 +95,13 @@ Item {
       return
     }
     store.historyRevision
-    var selectedRows = Progress.filterHistory(store.history, language, range)
+    durationChoices = Progress.durationOptions(store.history, language, store.settings.defaultDurationSeconds)
+    var selectedRows = Progress.filterHistory(store.history, language, range, {
+      durationSeconds: durationFilter,
+      mode: modeFilter,
+      category: categoryFilter,
+      difficulty: difficultyFilter
+    })
     rows = selectedRows
     summary = Progress.summary(selectedRows)
     speedPoints = Progress.metricPoints(selectedRows, "netWpm", 120)
@@ -87,6 +119,8 @@ Item {
 
   function chooseLanguage(value) {
     language = value === "fa" ? "fa" : "en"
+    if ((language === "fa" && categoryFilter === "programming")
+        || (language === "en" && categoryFilter === "formal")) categoryFilter = "all"
     rebuild()
   }
 
@@ -107,6 +141,10 @@ Item {
 
   onStoreChanged: rebuild()
   onLanguageChanged: rebuild()
+  onDurationFilterChanged: rebuild()
+  onModeFilterChanged: rebuild()
+  onCategoryFilterChanged: rebuild()
+  onDifficultyFilterChanged: rebuild()
   Connections { target: root.store; function onHistoryRevisionChanged() { root.rebuild() } }
   Component.onCompleted: {
     rebuild()
@@ -190,6 +228,67 @@ Item {
         }
       }
 
+      Text {
+        text: "COMPARISON FILTERS"
+        color: Color.muted
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
+
+      GridLayout {
+        columns: width >= Style.space(700) ? 4 : 2
+        columnSpacing: Style.spacing.md
+        rowSpacing: Style.spacing.sm
+        Layout.fillWidth: true
+
+        Dropdown {
+          label: "Duration"
+          fontFamily: root.fontFamily
+          value: root.durationFilter
+          options: root.durationChoices
+          Layout.fillWidth: true
+          onChanged: function(value) { root.durationFilter = String(value) }
+        }
+
+        Dropdown {
+          label: "Mode"
+          fontFamily: root.fontFamily
+          value: root.modeFilter
+          options: [
+            { value: "all", label: "All modes" },
+            { value: "standard", label: "Standard" },
+            { value: "adaptive", label: "Adaptive" }
+          ]
+          Layout.fillWidth: true
+          onChanged: function(value) { root.modeFilter = String(value) }
+        }
+
+        Dropdown {
+          label: "Content"
+          fontFamily: root.fontFamily
+          value: root.categoryFilter
+          options: root.categoryChoices
+          Layout.fillWidth: true
+          onChanged: function(value) { root.categoryFilter = String(value) }
+        }
+
+        Dropdown {
+          label: "Difficulty"
+          fontFamily: root.fontFamily
+          value: root.difficultyFilter
+          options: [
+            { value: "all", label: "All difficulties" },
+            { value: "mixed", label: "Mixed" },
+            { value: "1", label: "Easy" },
+            { value: "2", label: "Medium" },
+            { value: "3", label: "Hard" }
+          ]
+          Layout.fillWidth: true
+          onChanged: function(value) { root.difficultyFilter = String(value) }
+        }
+      }
+
       GridLayout {
         columns: width >= Style.space(760) ? 5 : 2
         columnSpacing: Style.spacing.sm
@@ -205,7 +304,8 @@ Item {
 
       Text {
         visible: root.rows.length < 3
-        text: "Complete at least three " + (root.language === "fa" ? "Parsi" : "English") + " tests to show progress trends."
+        text: "Complete at least three comparable " + (root.language === "fa" ? "Parsi" : "English")
+          + " tests, or broaden the filters, to show progress trends."
         color: Color.muted
         font.family: root.fontFamily
         font.pixelSize: Style.font.heading

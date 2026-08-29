@@ -21,17 +21,15 @@ function average(rows, field) {
 
 function comparableBaseline(result, history) {
   if (!result) return []
-  var sameLanguage = []
   var preferred = []
   var source = Array.isArray(history) ? history : []
   for (var index = 0; index < source.length; index++) {
     var row = source[index]
     if (!row || row.id === result.id || row.language !== result.language) continue
-    sameLanguage.push(row)
     if (Number(row.configuredDurationSeconds || 0) === Number(result.configuredDurationSeconds || 0)
         && String(row.mode || "standard") === String(result.mode || "standard")) preferred.push(row)
   }
-  return (preferred.length >= 3 ? preferred : sameLanguage).slice(0, 5)
+  return preferred.slice(0, 5)
 }
 
 function displayCharacter(value) {

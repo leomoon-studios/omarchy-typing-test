@@ -54,6 +54,9 @@ Item {
 
   function optionLabel(value) {
     var text = String(value || "mixed").replace(/[-_]/g, " ")
+    if (text === "1") return "Easy"
+    if (text === "2") return "Medium"
+    if (text === "3") return "Hard"
     return text.charAt(0).toUpperCase() + text.slice(1)
   }
 
@@ -125,9 +128,11 @@ Item {
     Text {
       text: {
         if (!root.store || root.store.history.length === 0) return ""
-        var bestEn = root.store.best("en")
-        var bestFa = root.store.best("fa")
-        return "Personal best   EN " + (bestEn === null ? "—" : Number(bestEn).toFixed(1) + " WPM")
+        var duration = Number(root.store.settings.defaultDurationSeconds || 60)
+        var scope = { durationSeconds: duration, mode: "standard" }
+        var bestEn = root.store.best("en", scope)
+        var bestFa = root.store.best("fa", scope)
+        return root.durationLabel(duration) + " STANDARD BEST   EN " + (bestEn === null ? "—" : Number(bestEn).toFixed(1) + " WPM")
           + "   ·   PARSI " + (bestFa === null ? "—" : Number(bestFa).toFixed(1) + " WPM")
       }
       visible: text !== ""

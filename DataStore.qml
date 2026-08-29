@@ -169,22 +169,34 @@ QtObject {
 
   function latest() { return history.length > 0 ? history[0] : null }
 
-  function best(language) {
+  function matchesScope(row, language, scope) {
+    if (!row || (language && row.language !== language)) return false
+    var selected = scope || {}
+    if (selected.durationSeconds !== undefined && selected.durationSeconds !== null
+        && String(selected.durationSeconds) !== "all"
+        && Number(row.configuredDurationSeconds || 0) !== Number(selected.durationSeconds)) return false
+    if (selected.mode && selected.mode !== "all" && String(row.mode || "standard") !== String(selected.mode)) return false
+    if (selected.category && selected.category !== "all" && String(row.category || "common") !== String(selected.category)) return false
+    if (selected.difficulty && selected.difficulty !== "all" && String(row.difficulty || "mixed") !== String(selected.difficulty)) return false
+    return true
+  }
+
+  function best(language, scope) {
     var value = null
     for (var i = 0; i < history.length; i++) {
       var row = history[i]
-      if (language && row.language !== language) continue
+      if (!matchesScope(row, language, scope)) continue
       var wpm = Number(row.netWpm) || 0
       if (value === null || wpm > value) value = wpm
     }
     return value
   }
 
-  function averageAccuracy(language) {
+  function averageAccuracy(language, scope) {
     var total = 0
     var count = 0
     for (var i = 0; i < history.length; i++) {
-      if (language && history[i].language !== language) continue
+      if (!matchesScope(history[i], language, scope)) continue
       total += Number(history[i].accuracy) || 0
       count++
     }
@@ -242,8 +254,14 @@ QtObject {
     var previous = importLanguage === "fa" ? customPersianText : customEnglishText
     var addition = ""
     for (var j = 0; j < records.length; j++) addition += JSON.stringify(records[j]) + "\n"
-    if (importLanguage === "fa") customFaFile.setText(previous + addition)
-    else customEnFile.setText(previous + addition)
+    var updated = previous + addition
+    if (importLanguage === "fa") {
+      customPersianText = updated
+      customFaFile.setText(updated)
+    } else {
+      customEnglishText = updated
+      customEnFile.setText(updated)
+    }
     importFinished(records.length, importCollection)
   }
 

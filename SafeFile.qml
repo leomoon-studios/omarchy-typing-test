@@ -7,6 +7,8 @@ QtObject {
   property string path: ""
   property string helperPath: Qt.resolvedUrl("scripts/safe-file.py").toString().replace(/^file:\/\//, "")
   property string pendingText: ""
+  property string queuedText: ""
+  property bool hasQueuedWrite: false
   property string collectedText: ""
 
   signal loaded(string value)
@@ -21,14 +23,28 @@ QtObject {
     reader.running = true
   }
 
-  function setText(value) {
-    if (writer.running) {
-      saveFailed("A previous write is still in progress")
-      return
-    }
+  function beginWrite(value) {
     pendingText = String(value || "")
     writer.command = ["python3", helperPath, "write", path]
     writer.running = true
+  }
+
+  function setText(value) {
+    var nextText = String(value || "")
+    if (writer.running) {
+      queuedText = nextText
+      hasQueuedWrite = true
+      return
+    }
+    beginWrite(nextText)
+  }
+
+  function continueQueuedWrite() {
+    if (!hasQueuedWrite) return
+    var nextText = queuedText
+    queuedText = ""
+    hasQueuedWrite = false
+    beginWrite(nextText)
   }
 
   property Process readerProc: Process {
@@ -50,6 +66,7 @@ QtObject {
     onExited: function(exitCode) {
       if (exitCode === 0) root.saved()
       else root.saveFailed("The file could not be saved")
+      root.continueQueuedWrite()
     }
   }
 }

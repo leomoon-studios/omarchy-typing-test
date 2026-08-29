@@ -19,16 +19,56 @@ function average(rows, field) {
   return count > 0 ? total / count : null
 }
 
-function filterHistory(history, language, range) {
+function matchesFilters(row, filters) {
+  var selected = filters || {}
+  var duration = selected.durationSeconds
+  if (duration !== undefined && duration !== null && String(duration) !== "all"
+      && Number(row.configuredDurationSeconds || 0) !== Number(duration)) return false
+  var mode = String(selected.mode || "all")
+  if (mode !== "all" && String(row.mode || "standard") !== mode) return false
+  var category = String(selected.category || "all")
+  if (category !== "all" && String(row.category || "common") !== category) return false
+  var difficulty = String(selected.difficulty || "all")
+  if (difficulty !== "all" && String(row.difficulty || "mixed") !== difficulty) return false
+  return true
+}
+
+function filterHistory(history, language, range, filters) {
   var selectedLanguage = language === "fa" ? "fa" : "en"
   var newest = []
   var source = Array.isArray(history) ? history : []
   for (var index = 0; index < source.length; index++) {
-    if (source[index] && source[index].language === selectedLanguage) newest.push(source[index])
+    if (source[index] && source[index].language === selectedLanguage && matchesFilters(source[index], filters)) newest.push(source[index])
   }
   newest.sort(function(a, b) { return String(b.completedAt || "").localeCompare(String(a.completedAt || "")) })
   var limit = range === "7-tests" ? 7 : range === "all" ? newest.length : 30
   return newest.slice(0, limit).reverse()
+}
+
+function durationOptions(history, language, preferredDuration) {
+  var selectedLanguage = language === "fa" ? "fa" : "en"
+  var values = {}
+  var preferred = Math.max(15, Math.round(finiteNumber(preferredDuration, 60)))
+  values[preferred] = true
+  var source = Array.isArray(history) ? history : []
+  for (var index = 0; index < source.length; index++) {
+    if (!source[index] || source[index].language !== selectedLanguage) continue
+    var duration = Math.max(15, Math.round(finiteNumber(source[index].configuredDurationSeconds, 60)))
+    values[duration] = true
+  }
+  var durations = Object.keys(values).map(function(value) { return Number(value) })
+  durations.sort(function(a, b) { return a - b })
+  var result = [{ value: "all", label: "All durations" }]
+  for (var durationIndex = 0; durationIndex < durations.length; durationIndex++) {
+    var seconds = durations[durationIndex]
+    var label = seconds < 60
+      ? seconds + " sec"
+      : seconds % 60 === 0
+        ? (seconds / 60) + " min"
+        : Math.floor(seconds / 60) + "m " + (seconds % 60) + "s"
+    result.push({ value: String(seconds), label: label })
+  }
+  return result
 }
 
 function errorRate(result) {
