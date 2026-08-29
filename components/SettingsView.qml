@@ -23,6 +23,8 @@ Item {
     function revealKeyboardTarget(item) {
         if (!item || !settingsScroll.contentItem || settingsScroll.contentItem.contentY === undefined)
             return;
+        if (!KeyboardNavigation.contains(settingsContent, item))
+            return;
 
         var position = item.mapToItem(settingsContent, 0, 0);
         var top = position.y;
@@ -67,32 +69,38 @@ Item {
         target: root.store
     }
 
-    ScrollView {
-        id: settingsScroll
-
+    ColumnLayout {
         anchors.fill: parent
-        clip: true
-        rightPadding: settingsContent.implicitHeight > height + 0.5
-            ? settingsScroll.ScrollBar.vertical.width + Style.spacing.sm
-            : 0
-        contentWidth: availableWidth
-        ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+        spacing: Style.spacing.md
 
-        ColumnLayout {
-            id: settingsContent
+        Text {
+            id: settingsHeader
+            text: "Settings"
+            color: Color.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.display
+            font.bold: true
+            Layout.fillWidth: true
+        }
 
-            width: settingsScroll.availableWidth
-            spacing: Style.spacing.md
+        ScrollView {
+            id: settingsScroll
 
-            Text {
-                text: "Settings"
-                color: Color.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.display
-                font.bold: true
-                Layout.fillWidth: true
-            }
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            rightPadding: settingsContent.implicitHeight > height + 0.5
+                ? settingsScroll.ScrollBar.vertical.width + Style.spacing.sm
+                : 0
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+            ColumnLayout {
+                id: settingsContent
+
+                width: settingsScroll.availableWidth
+                spacing: Style.spacing.md
 
             Toggle {
                 label: "Show live WPM"
@@ -408,9 +416,12 @@ Item {
 
             }
 
-            Item {
-                Layout.minimumHeight: Style.spacing.md
             }
+        }
+
+        RowLayout {
+            id: settingsFooter
+            Layout.fillWidth: true
 
             Button {
                 text: "Back"
@@ -420,8 +431,8 @@ Item {
                 onClicked: root.backRequested()
             }
 
+            Item { Layout.fillWidth: true }
         }
-
     }
 
     KeyboardConfirmDialog {

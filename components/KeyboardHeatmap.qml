@@ -157,6 +157,7 @@ BorderSurface {
 
     GridLayout {
       columns: width >= Style.space(700) ? 5 : 2
+      uniformCellWidths: true
       columnSpacing: Style.spacing.sm
       rowSpacing: Style.spacing.sm
       Layout.fillWidth: true
@@ -168,6 +169,7 @@ BorderSurface {
         focusable: true
         enabled: root.weakTargets.length > 0
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         onClicked: root.startDrill(root.weakTargets, "Weak keys")
       }
 
@@ -177,6 +179,7 @@ BorderSurface {
         bordered: true
         focusable: true
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         onClicked: root.startDrill(Heatmap.targetsForHand(root.heatmapData, "left"), "Left hand")
       }
 
@@ -186,11 +189,12 @@ BorderSurface {
         bordered: true
         focusable: true
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         onClicked: root.startDrill(Heatmap.targetsForHand(root.heatmapData, "right"), "Right hand")
       }
 
       Dropdown {
-        label: "Finger"
+        showLabel: false
         fontFamily: root.fontFamily
         value: root.selectedFinger
         options: [
@@ -204,6 +208,7 @@ BorderSurface {
           { value: "right-pinky", label: "Right pinky" }
         ]
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         onChanged: function(value) { root.selectedFinger = String(value) }
       }
 
@@ -213,6 +218,7 @@ BorderSurface {
         bordered: true
         focusable: true
         Layout.fillWidth: true
+        Layout.preferredHeight: Style.spacing.controlHeight
         onClicked: root.startDrill(Heatmap.targetsForFinger(root.heatmapData, root.selectedFinger),
           root.selectedFinger.replace("-", " "))
       }

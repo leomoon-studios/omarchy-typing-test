@@ -65,6 +65,7 @@ Item {
 
   function revealKeyboardTarget(item) {
     if (!item || !progressScroll.contentItem || progressScroll.contentItem.contentY === undefined) return
+    if (!KeyboardNavigation.contains(progressContent, item)) return
     var position = item.mapToItem(progressContent, 0, 0)
     var top = position.y
     var bottom = top + item.height
@@ -186,82 +187,88 @@ Item {
     Qt.callLater(function() { root.forceActiveFocus() })
   }
 
-  ScrollView {
-    id: progressScroll
+  ColumnLayout {
     anchors.fill: parent
-    clip: true
-    rightPadding: progressContent.implicitHeight > height + 0.5
-      ? progressScroll.ScrollBar.vertical.width + Style.spacing.sm
-      : 0
-    contentWidth: availableWidth
-    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+    spacing: Style.spacing.md
 
-    ColumnLayout {
-      id: progressContent
+    RowLayout {
+      id: progressHeader
+      Layout.fillWidth: true
 
-      width: progressScroll.availableWidth
-      spacing: Style.spacing.md
-
-      RowLayout {
+      Text {
+        text: "Progress"
+        color: Color.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.display
+        font.bold: true
         Layout.fillWidth: true
+      }
 
-        Text {
-          text: "Progress"
-          color: Color.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.display
-          font.bold: true
-          Layout.fillWidth: true
-        }
+      Button {
+        text: "English"
+        fontFamily: root.fontFamily
+        bordered: true
+        focusable: true
+        selected: root.language === "en"
+        Layout.preferredWidth: Style.space(100)
+        onClicked: root.chooseLanguage("en")
+      }
+
+      Button {
+        text: "پارسی"
+        fontFamily: root.fontFamily
+        bordered: true
+        focusable: true
+        selected: root.language === "fa"
+        Layout.preferredWidth: Style.space(100)
+        onClicked: root.chooseLanguage("fa")
+      }
+    }
+
+    RowLayout {
+      Layout.fillWidth: true
+
+      Text {
+        text: "HISTORY RANGE"
+        color: Color.muted
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        Layout.fillWidth: true
+      }
+
+      Repeater {
+        model: [{ value: "7-tests", label: "7 tests" }, { value: "30-tests", label: "30 tests" }, { value: "all", label: "All" }]
 
         Button {
-          text: "English"
+          required property var modelData
+          text: modelData.label
           fontFamily: root.fontFamily
           bordered: true
           focusable: true
-          selected: root.language === "en"
-          Layout.preferredWidth: Style.space(100)
-          onClicked: root.chooseLanguage("en")
-        }
-
-        Button {
-          text: "پارسی"
-          fontFamily: root.fontFamily
-          bordered: true
-          focusable: true
-          selected: root.language === "fa"
-          Layout.preferredWidth: Style.space(100)
-          onClicked: root.chooseLanguage("fa")
+          selected: root.range === modelData.value
+          onClicked: root.chooseRange(modelData.value)
         }
       }
+    }
 
-      RowLayout {
-        Layout.fillWidth: true
+    ScrollView {
+      id: progressScroll
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      clip: true
+      rightPadding: progressContent.implicitHeight > height + 0.5
+        ? progressScroll.ScrollBar.vertical.width + Style.spacing.sm
+        : 0
+      contentWidth: availableWidth
+      ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+      ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
-        Text {
-          text: "HISTORY RANGE"
-          color: Color.muted
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: true
-          Layout.fillWidth: true
-        }
+      ColumnLayout {
+        id: progressContent
 
-        Repeater {
-          model: [{ value: "7-tests", label: "7 tests" }, { value: "30-tests", label: "30 tests" }, { value: "all", label: "All" }]
-
-          Button {
-            required property var modelData
-            text: modelData.label
-            fontFamily: root.fontFamily
-            bordered: true
-            focusable: true
-            selected: root.range === modelData.value
-            onClicked: root.chooseRange(modelData.value)
-          }
-        }
-      }
+        width: progressScroll.availableWidth
+        spacing: Style.spacing.md
 
       Text {
         text: "COMPARISON FILTERS"
@@ -477,12 +484,15 @@ Item {
         }
       }
 
-      RowLayout {
-        Layout.fillWidth: true
-        Button { text: "Back"; fontFamily: root.fontFamily; bordered: true; focusable: true; onClicked: root.backRequested() }
-        Item { Layout.fillWidth: true }
-        Button { text: "History"; fontFamily: root.fontFamily; bordered: true; focusable: true; onClicked: root.historyRequested() }
       }
+    }
+
+    RowLayout {
+      id: progressFooter
+      Layout.fillWidth: true
+      Button { text: "Back"; fontFamily: root.fontFamily; bordered: true; focusable: true; onClicked: root.backRequested() }
+      Item { Layout.fillWidth: true }
+      Button { text: "History"; fontFamily: root.fontFamily; bordered: true; focusable: true; onClicked: root.historyRequested() }
     }
   }
 }

@@ -204,8 +204,6 @@ Run logic and corpus tests:
 node tests/run-tests.mjs
 ```
 
-See [SPEC.md](SPEC.md) for the full product and technical specification.
-
 ## Licensing
 
 The plugin source is MIT licensed. The bundled passage corpus is dedicated

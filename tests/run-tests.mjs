@@ -840,6 +840,12 @@ assert.match(progressViewSource, /initialComparison:\s*null/u, "Progress must be
 assert.match(progressViewSource, /KeyboardHeatmap\s*\{/u, "Progress must display the bilingual keyboard heatmap");
 assert.match(progressViewSource, /rows:\s*root\.rows/u, "the heatmap must use the active filtered comparison rows");
 assert.match(progressViewSource, /onDrillRequested/u, "Progress must forward keyboard drill actions");
+assert.equal(progressViewSource.indexOf("id: progressHeader") < progressViewSource.indexOf("id: progressScroll"), true,
+  "Progress header must remain outside and above its scroll area");
+assert.equal(progressViewSource.indexOf("id: progressScroll") < progressViewSource.indexOf("id: progressFooter"), true,
+  "Progress footer must remain outside and below its scroll area");
+assert.match(progressViewSource, /id:\s*progressScroll[\s\S]*?Layout\.fillHeight:\s*true/u,
+  "Progress must give the middle scroll area the available height");
 const keyboardHeatmapSource = fs.readFileSync(path.join(root, "components", "KeyboardHeatmap.qml"), "utf8");
 assert.match(keyboardHeatmapSource, /CPM/u, "heatmap keys must display per-key speed");
 assert.match(keyboardHeatmapSource, /tries/u, "heatmap keys must display opportunity counts");
@@ -847,11 +853,22 @@ assert.match(keyboardHeatmapSource, /% err/u, "heatmap keys must display error r
 assert.match(keyboardHeatmapSource, /targetsForHand/u, "heatmap must support hand drills");
 assert.match(keyboardHeatmapSource, /targetsForFinger/u, "heatmap must support finger drills");
 assert.match(keyboardHeatmapSource, /weakestTargets/u, "heatmap must support weak-key drills");
+assert.match(keyboardHeatmapSource, /uniformCellWidths:\s*true/u,
+  "heatmap drill controls must use equal-width columns");
+assert.match(keyboardHeatmapSource, /showLabel:\s*false/u,
+  "the finger selector must not add a second vertical label row");
 const setupViewSource = fs.readFileSync(path.join(root, "components", "SetupView.qml"), "utf8");
 for (const format of ["timed", "words", "passage"]) {
   assert.match(setupViewSource, new RegExp(`chooseTestType\\("${format}"\\)`, "u"), `setup must expose ${format} tests`);
 }
 assert.match(setupViewSource, /model:\s*\[10, 25, 50, 100\]/u, "setup must expose 10, 25, 50, and 100-word tests");
+const settingsViewSource = fs.readFileSync(path.join(root, "components", "SettingsView.qml"), "utf8");
+assert.equal(settingsViewSource.indexOf("id: settingsHeader") < settingsViewSource.indexOf("id: settingsScroll"), true,
+  "Settings header must remain outside and above its scroll area");
+assert.equal(settingsViewSource.indexOf("id: settingsScroll") < settingsViewSource.indexOf("id: settingsFooter"), true,
+  "Settings footer must remain outside and below its scroll area");
+assert.match(settingsViewSource, /id:\s*settingsScroll[\s\S]*?Layout\.fillHeight:\s*true/u,
+  "Settings must give the middle scroll area the available height");
 for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml", "KeyboardHeatmap.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);
