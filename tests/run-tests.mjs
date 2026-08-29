@@ -946,12 +946,20 @@ assert.match(dataStoreSource, /history-backup\.jsonl/u, "destructive history cha
 assert.match(dataStoreSource, /history-recovery\.jsonl/u, "malformed history must create a recovery snapshot");
 assert.match(dataStoreSource, /customEnglishText\s*=\s*updated/u, "English imports must update the active passage library immediately");
 assert.match(dataStoreSource, /customPersianText\s*=\s*updated/u, "Parsi imports must update the active passage library immediately");
+assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("en"\)/u,
+  "English imports must report success only after their custom-text file is saved");
+assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("fa"\)/u,
+  "Parsi imports must report success only after their custom-text file is saved");
+assert.match(dataStoreSource, /pendingImportPreviousText/u,
+  "failed imported-text saves must retain enough state to roll back the active library");
 assert.match(dataStoreSource, /function matchesScope/u, "personal-best and accuracy queries must support comparison scopes");
 const safeFileSource = fs.readFileSync(path.join(root, "scripts", "safe-file.py"), "utf8");
 assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink swaps");
 assert.match(safeFileSource, /os\.fstat\(fd\)/u, "safe file reads must inspect the opened descriptor");
 assert.match(safeFileSource, /MAX_BYTES/u, "safe file reads must enforce a byte limit");
 const safeFileQmlSource = fs.readFileSync(path.join(root, "SafeFile.qml"), "utf8");
+assert.match(safeFileQmlSource, /write\(root\.pendingText\)[\s\S]*?stdinEnabled\s*=\s*false/u,
+  "safe writes must close stdin after queuing the complete payload");
 assert.match(safeFileQmlSource, /property bool hasQueuedWrite/u, "safe writes must retain a pending update");
 assert.match(safeFileQmlSource, /queuedText\s*=\s*nextText/u, "safe writes must coalesce to the latest pending value");
 assert.match(safeFileQmlSource, /continueQueuedWrite\(\)/u, "queued safe writes must continue after the active write exits");
@@ -1029,6 +1037,9 @@ assert.equal(settingsViewSource.indexOf("id: settingsScroll") < settingsViewSour
   "Settings footer must remain outside and below its scroll area");
 assert.match(settingsViewSource, /id:\s*settingsScroll[\s\S]*?Layout\.fillHeight:\s*true/u,
   "Settings must give the middle scroll area the available height");
+assert.match(settingsViewSource,
+  /id:\s*importCollectionField[\s\S]*?verticalPadding:\s*0[\s\S]*?verticalAlignment:\s*TextInput\.AlignVCenter[\s\S]*?Layout\.preferredHeight:\s*root\.importControlHeight/u,
+  "the imported collection field must center its text without increasing the shared control height");
 assert.match(dataStoreSource, /readonly property bool importPickerActive:\s*picker\.running/u,
   "DataStore must expose the import picker lifecycle to the overlay");
 assert.match(panelSource, /visible:\s*root\.opened\s*&&\s*!dataStore\.importPickerActive/u,

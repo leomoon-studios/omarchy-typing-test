@@ -32,6 +32,13 @@ QtObject {
   property string importPath: ""
   property string pendingPickerOutput: ""
   property bool pickerExited: false
+  property bool pickerOutputFinished: false
+  property int pickerExitCode: -1
+  property bool importInProgress: false
+  property string pendingImportLanguage: ""
+  property string pendingImportCollection: ""
+  property int pendingImportCount: 0
+  property string pendingImportPreviousText: ""
   readonly property bool importPickerActive: picker.running
 
   signal importFinished(int count, string collection)
@@ -219,23 +226,68 @@ QtObject {
   }
 
   function chooseImport(language, collection) {
-    if (picker.running) return
+    if (importInProgress) return false
     importLanguage = language === "fa" ? "fa" : "en"
     importCollection = String(collection || "Imported").trim() || "Imported"
     pendingPickerOutput = ""
     pickerExited = false
+    pickerOutputFinished = false
+    pickerExitCode = -1
+    importInProgress = true
     picker.running = true
+    return true
   }
 
   function maybeVerifyImport() {
-    if (!pickerExited || !pendingPickerOutput) return
+    if (!pickerExited || !pickerOutputFinished || !importInProgress) return
+    if (pickerExitCode !== 0) {
+      failImport(pickerExitCode === 1
+        ? "No text file was selected."
+        : "The text file chooser could not complete the selection.")
+      return
+    }
+    if (!pendingPickerOutput) {
+      failImport("The text file chooser returned no selected file.")
+      return
+    }
     importPath = pendingPickerOutput
     Qt.callLater(function() { importFile.reload() })
   }
 
+  function resetPendingImport() {
+    importInProgress = false
+    pendingImportLanguage = ""
+    pendingImportCollection = ""
+    pendingImportCount = 0
+    pendingImportPreviousText = ""
+  }
+
+  function failImport(message) {
+    resetPendingImport()
+    importFailed(String(message || "The text file could not be imported."))
+  }
+
+  function completeImport(language) {
+    if (!importInProgress || pendingImportLanguage !== language || pendingImportCount <= 0) return
+    var count = pendingImportCount
+    var collection = pendingImportCollection
+    resetPendingImport()
+    importFinished(count, collection)
+  }
+
+  function failCustomSave(language, message) {
+    if (importInProgress && pendingImportLanguage === language) {
+      if (language === "fa") customPersianText = pendingImportPreviousText
+      else customEnglishText = pendingImportPreviousText
+      failImport(message)
+      return
+    }
+    reportError(message)
+  }
+
   function finishImport(raw) {
     if ((importLanguage === "fa" && !customPersianWritable) || (importLanguage !== "fa" && !customEnglishWritable)) {
-      importFailed("Imported passages were not changed because the existing custom-text file could not be read safely.")
+      failImport("Imported passages were not changed because the existing custom-text file could not be read safely.")
       return
     }
     var paragraphs = String(raw || "").replace(/\r/g, "").split(/\n\s*\n+/)
@@ -256,13 +308,17 @@ QtObject {
       })
     }
     if (records.length === 0) {
-      importFailed("The selected file did not contain any non-empty paragraphs.")
+      failImport("The selected file did not contain any non-empty paragraphs.")
       return
     }
     var previous = importLanguage === "fa" ? customPersianText : customEnglishText
     var addition = ""
     for (var j = 0; j < records.length; j++) addition += JSON.stringify(records[j]) + "\n"
     var updated = previous + addition
+    pendingImportLanguage = importLanguage
+    pendingImportCollection = importCollection
+    pendingImportCount = records.length
+    pendingImportPreviousText = previous
     if (importLanguage === "fa") {
       customPersianText = updated
       customFaFile.setText(updated)
@@ -270,7 +326,6 @@ QtObject {
       customEnglishText = updated
       customEnFile.setText(updated)
     }
-    importFinished(records.length, importCollection)
   }
 
   function clearCustom(language) {
@@ -344,7 +399,8 @@ QtObject {
         root.reportError("English imported passages could not be read safely.")
       }
     }
-    onSaveFailed: root.reportError("English imported passages could not be saved safely.")
+    onSaved: root.completeImport("en")
+    onSaveFailed: root.failCustomSave("en", "English imported passages could not be saved safely.")
   }
 
   property SafeFile customFaFileView: SafeFile {
@@ -360,7 +416,8 @@ QtObject {
         root.reportError("Parsi imported passages could not be read safely.")
       }
     }
-    onSaveFailed: root.reportError("Parsi imported passages could not be saved safely.")
+    onSaved: root.completeImport("fa")
+    onSaveFailed: root.failCustomSave("fa", "Parsi imported passages could not be saved safely.")
   }
 
   property SafeFile historyBackupFileView: SafeFile {
@@ -388,12 +445,13 @@ QtObject {
       waitForEnd: true
       onStreamFinished: {
         root.pendingPickerOutput = String(text || "").trim()
+        root.pickerOutputFinished = true
         root.maybeVerifyImport()
       }
     }
     onExited: function(exitCode) {
-      if (exitCode !== 0) return
       root.pickerExited = true
+      root.pickerExitCode = exitCode
       root.maybeVerifyImport()
     }
   }
@@ -402,6 +460,6 @@ QtObject {
     id: importFile
     path: root.importPath
     onLoaded: function(value) { root.finishImport(value) }
-    onLoadFailed: function(error) { root.importFailed("The selected file could not be read safely as UTF-8 text.") }
+    onLoadFailed: function(error) { root.failImport("The selected file could not be read safely as UTF-8 text.") }
   }
 }

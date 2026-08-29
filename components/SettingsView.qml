@@ -322,9 +322,12 @@ Item {
                     }
 
                     TextField {
+                        id: importCollectionField
                         placeholderText: "Collection name"
                         text: root.importCollection
                         font.family: root.fontFamily
+                        verticalPadding: 0
+                        verticalAlignment: TextInput.AlignVCenter
                         Layout.fillWidth: true
                         Layout.preferredHeight: root.importControlHeight
                         onTextChanged: root.importCollection = text
@@ -344,13 +347,14 @@ Item {
                     }
 
                     Button {
-                        text: "Choose .txt"
+                        text: root.store && root.store.importInProgress ? "Importing..." : "Choose .txt"
                         fontFamily: root.fontFamily
                         bordered: true
                         focusable: true
+                        enabled: root.store && !root.store.importInProgress
                         Layout.preferredHeight: root.importControlHeight
                         onClicked: {
-                            root.importStatus = "";
+                            root.importStatus = "Importing selected text...";
                             if (root.store)
                                 root.store.chooseImport(root.importLanguage, root.importCollection);
 
@@ -364,7 +368,8 @@ Item {
             Text {
                 visible: root.importStatus !== ""
                 text: root.importStatus
-                color: root.importStatus.indexOf("Imported ") === 0 ? Color.accent : Color.urgent
+                color: root.importStatus.indexOf("Imported ") === 0 || root.importStatus.indexOf("Importing ") === 0
+                    ? Color.accent : Color.urgent
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
                 wrapMode: Text.WordWrap

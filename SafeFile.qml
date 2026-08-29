@@ -26,6 +26,7 @@ QtObject {
   function beginWrite(value) {
     pendingText = String(value || "")
     writer.command = ["python3", helperPath, "write", path]
+    writer.stdinEnabled = true
     writer.running = true
   }
 
@@ -62,7 +63,12 @@ QtObject {
   property Process writerProc: Process {
     id: writer
     stdinEnabled: true
-    onStarted: write(root.pendingText)
+    onStarted: {
+      write(root.pendingText)
+      // safe-file.py reads until EOF, so close the write channel after the
+      // complete payload has been queued.
+      stdinEnabled = false
+    }
     onExited: function(exitCode) {
       if (exitCode === 0) root.saved()
       else root.saveFailed("The file could not be saved")
