@@ -103,6 +103,78 @@ function buildPassageTest(passages, language, category, difficulty, randomFuncti
   return { text: String(candidates[0].text || "").trim(), passageIds: [candidates[0].id] }
 }
 
+function buildRetryTest(passages, passageIds, testType, targetWordCount) {
+  var source = Array.isArray(passages) ? passages : []
+  var requestedIds = Array.isArray(passageIds) ? passageIds : []
+  var format = testType === "words" || testType === "passage" ? testType : "timed"
+  var requiredIds = format === "passage" ? requestedIds.slice(0, 1) : requestedIds.slice()
+  if (requiredIds.length === 0) {
+    return { available: false, text: "", passageIds: [], missingPassageIds: [] }
+  }
+
+  var byId = {}
+  for (var sourceIndex = 0; sourceIndex < source.length; sourceIndex++) {
+    var sourceId = String(source[sourceIndex] && source[sourceIndex].id || "")
+    if (sourceId && byId[sourceId] === undefined) byId[sourceId] = source[sourceIndex]
+  }
+
+  var selected = []
+  var missing = []
+  for (var idIndex = 0; idIndex < requiredIds.length; idIndex++) {
+    var id = String(requiredIds[idIndex] || "")
+    if (!id || byId[id] === undefined) {
+      if (id && missing.indexOf(id) < 0) missing.push(id)
+      continue
+    }
+    selected.push(byId[id])
+  }
+  if (selected.length !== requiredIds.length) {
+    return { available: false, text: "", passageIds: [], missingPassageIds: missing }
+  }
+
+  if (format === "passage") {
+    return {
+      available: true,
+      text: String(selected[0].text || "").trim(),
+      passageIds: [String(selected[0].id)]
+    }
+  }
+
+  var selectedIds = []
+  for (var selectedIndex = 0; selectedIndex < selected.length; selectedIndex++) {
+    selectedIds.push(String(selected[selectedIndex].id))
+  }
+  if (format === "timed") {
+    var textParts = []
+    for (var textIndex = 0; textIndex < selected.length; textIndex++)
+      textParts.push(String(selected[textIndex].text || "").trim())
+    return {
+      available: textParts.length > 0,
+      text: textParts.join(" "),
+      passageIds: selectedIds,
+      missingPassageIds: []
+    }
+  }
+
+  var combined = []
+  for (var wordIndex = 0; wordIndex < selected.length; wordIndex++)
+    combined = combined.concat(words(selected[wordIndex].text))
+  if (format === "words") {
+    var target = Math.max(1, Math.round(Number(targetWordCount) || 25))
+    if (combined.length < target) {
+      return { available: false, text: "", passageIds: [], missingPassageIds: [] }
+    }
+    combined = combined.slice(0, target)
+    return {
+      available: true,
+      text: combined.join(" "),
+      passageIds: selectedIds,
+      missingPassageIds: []
+    }
+  }
+  return { available: false, text: "", passageIds: [], missingPassageIds: [] }
+}
+
 function buildDifficultTest(passages, language, difficultCharacters, targetCharacters) {
   var characters = (difficultCharacters || []).slice(0, 12)
   if (characters.length === 0) return buildTest(passages, language, "common", "mixed", targetCharacters)

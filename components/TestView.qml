@@ -40,6 +40,7 @@ Item {
   property bool pageLayoutPending: false
   property bool pageResetPending: false
   property string errorMessage: ""
+  property string sourceNotice: ""
   property var confirmationKeyHandler: null
 
   readonly property var normalizationOptions: store ? store.settings : ({})
@@ -60,6 +61,8 @@ Item {
       ? Number(nextOptions.targetWordCount) : 0
     if (!Array.isArray(nextOptions.adaptiveTargets)) nextOptions.adaptiveTargets = []
     if (!Array.isArray(nextOptions.recentPassageIds)) nextOptions.recentPassageIds = []
+    if (!Array.isArray(nextOptions.retryPassageIds)) nextOptions.retryPassageIds = []
+    nextOptions.retryRequested = nextOptions.retryRequested === true
     options = nextOptions
     var target = options.testType === "timed"
       ? Math.max(1000, Math.ceil(Number(options.durationSeconds || 60) / 60 * 700))
@@ -78,7 +81,19 @@ Item {
       difficult = Object.keys(counts).sort(function(a, b) { return counts[b] - counts[a] })
     }
     var built
-    if (options.mode === "adaptive") {
+    if (options.retryRequested) {
+      var retryBuild = PassageLoader.buildRetryTest(library ? library.passages : [], options.retryPassageIds,
+        options.testType, options.targetWordCount)
+      if (retryBuild.available) {
+        built = retryBuild
+        sourceNotice = ""
+      } else {
+        sourceNotice = "The saved passage is no longer available, so a new passage was selected."
+      }
+    } else {
+      sourceNotice = ""
+    }
+    if (!built && options.mode === "adaptive") {
       var adaptiveTargets = options.adaptiveTargets
       if (adaptiveTargets.length === 0 && store) {
         adaptiveTargets = AdaptivePractice.rankTargets(store.history, options.language || "en", store.settings).characters
@@ -107,7 +122,7 @@ Item {
           : PassageLoader.buildTest(library ? library.passages : [], options.language || "en",
               "common", "mixed", target)
       }
-    } else {
+    } else if (!built) {
       if (options.testType === "passage") {
         built = options.category === "difficult"
           ? PassageLoader.buildDifficultPassageTest(library ? library.passages : [], options.language || "en", difficult)
@@ -121,6 +136,17 @@ Item {
           ? PassageLoader.buildDifficultTest(library ? library.passages : [], options.language || "en", difficult, target)
           : PassageLoader.buildTest(library ? library.passages : [], options.language || "en", options.category || "common", options.difficulty || "mixed", target)
       }
+    }
+    if ((!built || !built.text) && options.retryRequested) {
+      options.mode = "standard"
+      options.category = "common"
+      options.difficulty = "mixed"
+      options.adaptiveTargets = []
+      built = options.testType === "passage"
+        ? PassageLoader.buildPassageTest(library ? library.passages : [], options.language || "en", "common", "mixed")
+        : options.testType === "words"
+          ? PassageLoader.buildWordTest(library ? library.passages : [], options.language || "en", "common", "mixed", options.targetWordCount)
+          : PassageLoader.buildTest(library ? library.passages : [], options.language || "en", "common", "mixed", target)
     }
     expectedText = built.text
     if (store && store.settings.zwnjCountsAsError === false) expectedText = expectedText.replace(/\u200c/g, "")
@@ -550,6 +576,17 @@ Item {
       font.pixelSize: Style.font.caption
       font.bold: true
       elide: Text.ElideRight
+      horizontalAlignment: Text.AlignHCenter
+      Layout.fillWidth: true
+    }
+
+    Text {
+      visible: root.sourceNotice !== ""
+      text: root.sourceNotice
+      color: Color.muted
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+      wrapMode: Text.WordWrap
       horizontalAlignment: Text.AlignHCenter
       Layout.fillWidth: true
     }

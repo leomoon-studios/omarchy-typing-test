@@ -34,6 +34,7 @@ passages, timed and completion-based tests, detailed error analysis, and history
 - 1, 3, 5, and 10 minute presets plus custom durations
 - Fixed 10, 25, 50, and 100-word tests
 - Full-passage completion tests with an elapsed timer and no countdown
+- Separate result actions for retrying the exact passage or choosing a new passage with the same settings
 - Adaptive English and Parsi practice based on recent difficult characters
 - Local coaching summaries with practical next-test recommendations
 - Progress charts for WPM, accuracy, consistency, errors, and character trends
@@ -103,6 +104,11 @@ characters. Adaptive analysis is kept separate for English and Parsi and unlocks
 after three tests in that language when a character has enough useful history.
 Completed tests include a short local coaching summary, while Progress shows
 language-specific trends without sending history anywhere.
+
+On Results, choose **Retry same passage** to reconstruct the test from its saved
+passage IDs, or **New passage, same settings** for a fresh selection. If a saved
+import has since been removed, the retry automatically selects another available
+passage and displays a fallback notice.
 
 Keyboard controls during a test:
 

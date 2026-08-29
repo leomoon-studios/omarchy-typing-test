@@ -96,6 +96,27 @@ Item {
     currentView = "test"
   }
 
+  function copyOptions(options) {
+    var copy = {}
+    for (var key in (options || {})) copy[key] = options[key]
+    return copy
+  }
+
+  function retrySamePassage() {
+    var options = copyOptions(activeOptions)
+    options.retryRequested = true
+    options.retryPassageIds = currentResult && Array.isArray(currentResult.passageIds)
+      ? currentResult.passageIds.slice() : []
+    startTest(options)
+  }
+
+  function newPassageSameSettings() {
+    var options = copyOptions(activeOptions)
+    options.retryRequested = false
+    options.retryPassageIds = []
+    startTest(options)
+  }
+
   function startAdaptive(language, durationSeconds, testType, targetWordCount) {
     var selectedLanguage = language === "fa" ? "fa" : "en"
     var selectedTestType = testType === "words" ? "words" : "timed"
@@ -119,6 +140,18 @@ Item {
 
   function finishTest(result) {
     currentResult = result
+    var completedOptions = copyOptions(activeOptions)
+    completedOptions.language = result.language || completedOptions.language || "en"
+    completedOptions.testType = result.testType || completedOptions.testType || "timed"
+    completedOptions.durationSeconds = completedOptions.testType === "timed" ? Number(result.configuredDurationSeconds || 60) : 0
+    completedOptions.targetWordCount = completedOptions.testType === "words" ? Number(result.targetWordCount || 25) : 0
+    completedOptions.category = result.category || "common"
+    completedOptions.difficulty = result.difficulty || "mixed"
+    completedOptions.mode = result.mode || "standard"
+    completedOptions.adaptiveTargets = result.adaptiveTargets || []
+    completedOptions.retryRequested = false
+    completedOptions.retryPassageIds = []
+    activeOptions = completedOptions
     dataStore.appendResult(result)
     resultComparison = comparisonForResult(result)
     progressComparison = resultComparison
@@ -197,7 +230,8 @@ Item {
       comparisonContext: root.resultComparison
       store: dataStore
       fontFamily: root.contentFontFamily
-      onRepeatRequested: root.startTest(root.activeOptions)
+      onRetryRequested: root.retrySamePassage()
+      onNewPassageRequested: root.newPassageSameSettings()
       onNewTestRequested: root.currentView = "setup"
       onHistoryRequested: root.currentView = "history"
       onProgressRequested: root.currentView = "progress"

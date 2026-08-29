@@ -323,6 +323,26 @@ const persianWordBuild = PassageLoader.buildWordTest([
   { id: "fa-words", language: "fa", category: "common", difficulty: 1, text: "یک دو سه چهار پنج شش هفت هشت نه ده" }
 ], "fa", "common", 1, 10);
 assert.equal(persianWordBuild.text.split(/\s+/u).length, 10);
+const retrySources = [
+  { id: "retry-a", language: "en", category: "common", difficulty: 1, text: "First  passage keeps its spacing." },
+  { id: "retry-b", language: "en", category: "common", difficulty: 1, text: "Second passage follows exactly." }
+];
+const timedRetry = PassageLoader.buildRetryTest(retrySources, ["retry-b", "retry-a", "retry-b"], "timed", 0);
+assert.equal(timedRetry.available, true);
+assert.equal(timedRetry.text, "Second passage follows exactly. First  passage keeps its spacing. Second passage follows exactly.");
+assert.deepEqual(Array.from(timedRetry.passageIds), ["retry-b", "retry-a", "retry-b"]);
+const wordRetryIds = ["retry-a", "retry-b", "retry-a", "retry-b", "retry-a", "retry-b"];
+const wordRetry = PassageLoader.buildRetryTest(retrySources, wordRetryIds, "words", 25);
+assert.equal(wordRetry.available, true);
+assert.equal(wordRetry.text.split(/\s+/u).length, 25);
+assert.deepEqual(Array.from(wordRetry.passageIds), wordRetryIds);
+const passageRetry = PassageLoader.buildRetryTest(retrySources, ["retry-b"], "passage", 0);
+assert.equal(passageRetry.text, retrySources[1].text);
+assert.deepEqual(Array.from(passageRetry.passageIds), ["retry-b"]);
+const removedImportRetry = PassageLoader.buildRetryTest(retrySources, ["custom-en-removed-1"], "passage", 0);
+assert.equal(removedImportRetry.available, false);
+assert.deepEqual(Array.from(removedImportRetry.missingPassageIds), ["custom-en-removed-1"]);
+assert.equal(PassageLoader.buildRetryTest(retrySources, [], "timed", 0).available, false);
 
 function adaptiveResult(id, language, character, opportunities, errors, passageIds = []) {
   return {
@@ -612,17 +632,25 @@ assert.match(panelSource, /"progress"/u, "panel must route to the Progress view"
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");
 assert.match(panelSource, /function comparisonForResult/u, "result pages must receive a comparison context");
 assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u, "Progress-to-result navigation must preserve comparison context");
+assert.match(panelSource, /function retrySamePassage/u, "results must support exact passage retries");
+assert.match(panelSource, /function newPassageSameSettings/u, "results must support random repeats with unchanged settings");
+assert.match(panelSource, /currentResult\.passageIds/u, "exact retry must use the completed result's saved passage IDs");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
 assert.match(testViewSource, /schemaVersion:\s*3/u, "new results must use schema version 3");
 assert.match(testViewSource, /testType:\s*options\.testType/u, "new results must identify their test format");
 assert.match(testViewSource, /options\.testType === "timed" && root\.remainingSeconds <= 0/u, "only timed tests may finish from the countdown");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
 assert.match(testViewSource, /sourceValue\.replace\(\/\\u200c\/g/u, "typing input must remove ignored ZWNJs before positional comparison");
+assert.match(testViewSource, /PassageLoader\.buildRetryTest/u, "typing tests must reconstruct exact retries before random selection");
+assert.match(testViewSource, /saved passage is no longer available/u, "missing retry sources must display a fallback notice");
 const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
 assert.match(resultsViewSource, /if \(option === "1"\) return "EASY"/u, "results must label numeric difficulty values");
 assert.match(resultsViewSource, /if \(character === " "\) return "Space"/u, "results must label whitespace substitutions");
 assert.match(resultsViewSource, /text:\s*"PROGRESS COMPARISON"/u, "results must identify their active comparison group");
 assert.match(resultsViewSource, /Scoped PB/u, "results must display the scoped personal best");
+assert.match(resultsViewSource, /text:\s*"Retry same passage"/u, "results must label exact retries explicitly");
+assert.match(resultsViewSource, /text:\s*"New passage, same settings"/u, "results must keep random repeat as a separate action");
+assert.doesNotMatch(resultsViewSource, /text:\s*"Repeat"/u, "results must not retain the ambiguous Repeat action");
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
 assert.match(historyViewSource, /if \(testType === "passage"\) return "PASSAGE"/u, "history must label passage-completion results");

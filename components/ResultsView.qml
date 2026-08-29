@@ -19,7 +19,8 @@ Item {
   readonly property var coachingSummary: store && store.settings.coachingEnabled === false
     ? ({ messages: [], baselineCount: 0, recommendation: null })
     : Coaching.summarize(result, store ? store.history : [], adaptiveAnalysis)
-  signal repeatRequested()
+  signal retryRequested()
+  signal newPassageRequested()
   signal newTestRequested()
   signal historyRequested()
   signal progressRequested()
@@ -434,14 +435,15 @@ Item {
       Item { Layout.minimumHeight: Style.spacing.xs }
       GridLayout {
         Layout.fillWidth: true
-        columns: width >= Style.space(700) ? (root.adaptiveAnalysis.available ? 5 : 4) : 2
+        columns: width >= Style.space(900) ? (root.adaptiveAnalysis.available ? 6 : 5) : 2
         columnSpacing: Style.spacing.sm
         rowSpacing: Style.spacing.sm
         Button { text: "History"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.historyRequested() }
         Button { text: "Progress"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.progressRequested() }
         Button { visible: root.adaptiveAnalysis.available; text: "Adaptive practice"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.practiceRequested() }
         Button { text: "New test"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newTestRequested() }
-        Button { text: "Repeat"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.repeatRequested() }
+        Button { text: "Retry same passage"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.retryRequested() }
+        Button { text: "New passage, same settings"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newPassageRequested() }
       }
     }
   }
