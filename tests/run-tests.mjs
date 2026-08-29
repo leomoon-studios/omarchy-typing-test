@@ -1029,6 +1029,12 @@ assert.equal(settingsViewSource.indexOf("id: settingsScroll") < settingsViewSour
   "Settings footer must remain outside and below its scroll area");
 assert.match(settingsViewSource, /id:\s*settingsScroll[\s\S]*?Layout\.fillHeight:\s*true/u,
   "Settings must give the middle scroll area the available height");
+assert.match(dataStoreSource, /readonly property bool importPickerActive:\s*picker\.running/u,
+  "DataStore must expose the import picker lifecycle to the overlay");
+assert.match(panelSource, /visible:\s*root\.opened\s*&&\s*!dataStore\.importPickerActive/u,
+  "the overlay must hide while the desktop file chooser is active");
+assert.match(panelSource, /WlrLayershell\.keyboardFocus:\s*panel\.visible\s*\?/u,
+  "the overlay must release exclusive keyboard focus while hidden for the file chooser");
 for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml", "KeyboardHeatmap.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);

@@ -32,6 +32,7 @@ QtObject {
   property string importPath: ""
   property string pendingPickerOutput: ""
   property bool pickerExited: false
+  readonly property bool importPickerActive: picker.running
 
   signal importFinished(int count, string collection)
   signal importFailed(string message)

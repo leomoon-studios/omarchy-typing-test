@@ -225,6 +225,19 @@ Item {
   }
 
   DataStore { id: dataStore }
+
+  Connections {
+    target: dataStore
+    function onImportPickerActiveChanged() {
+      if (!dataStore.importPickerActive && root.opened) {
+        Qt.callLater(function() {
+          if (viewLoader.item && typeof viewLoader.item.forceActiveFocus === "function")
+            viewLoader.item.forceActiveFocus()
+        })
+      }
+    }
+  }
+
   PassageLibrary {
     id: passageLibrary
     pluginDir: root.pluginDir
@@ -311,13 +324,15 @@ Item {
 
   PanelWindow {
     id: panel
-    visible: root.opened
+    // A portal file chooser is a normal desktop window, so this overlay-layer
+    // surface must get out of its way while the chooser is open.
+    visible: root.opened && !dataStore.importPickerActive
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "leomoon-studios-typing-test"
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: panel.visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     Rectangle {
       anchors.fill: parent
