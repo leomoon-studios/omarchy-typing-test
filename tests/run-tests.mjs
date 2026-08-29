@@ -377,6 +377,18 @@ assert.equal(Progress.filterHistory(scopedProgress, "en", "all", {
   durationSeconds: "all", mode: "all", category: "all", difficulty: "all"
 }).length, 5);
 assert.deepEqual(Array.from(Progress.durationOptions(scopedProgress, "en", 300), row => row.value), ["all", "60", "180", "300"]);
+const scopedComparison = Progress.comparisonContext(exactScope, "en", "30-tests", {
+  durationSeconds: "60",
+  mode: "standard",
+  category: "common",
+  difficulty: "1"
+});
+assert.equal(scopedComparison.label, "English · 1 min · Standard · Common · Easy · Last 30 tests");
+assert.equal(scopedComparison.count, 1);
+assert.equal(scopedComparison.bestWpm, 100);
+assert.equal(Progress.comparisonContext([], "fa", "all", {
+  durationSeconds: "all", mode: "all", category: "all", difficulty: "all"
+}).label, "Parsi · All durations · All modes · All content · All difficulties · All history");
 const progressSummary = Progress.summary(progressSeven);
 assert.equal(progressSummary.count, 7);
 assert.equal(progressSummary.currentWpm, 90);
@@ -516,6 +528,8 @@ assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must 
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
 assert.match(panelSource, /"progress"/u, "panel must route to the Progress view");
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");
+assert.match(panelSource, /function comparisonForResult/u, "result pages must receive a comparison context");
+assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u, "Progress-to-result navigation must preserve comparison context");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
 assert.match(testViewSource, /schemaVersion:\s*2/u, "new results must use schema version 2");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
@@ -523,8 +537,14 @@ assert.match(testViewSource, /sourceValue\.replace\(\/\\u200c\/g/u, "typing inpu
 const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
 assert.match(resultsViewSource, /if \(option === "1"\) return "EASY"/u, "results must label numeric difficulty values");
 assert.match(resultsViewSource, /if \(character === " "\) return "Space"/u, "results must label whitespace substitutions");
+assert.match(resultsViewSource, /text:\s*"PROGRESS COMPARISON"/u, "results must identify their active comparison group");
+assert.match(resultsViewSource, /Scoped PB/u, "results must display the scoped personal best");
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
+const progressViewSource = fs.readFileSync(path.join(root, "components", "ProgressView.qml"), "utf8");
+assert.match(progressViewSource, /text:\s*"ACTIVE COMPARISON"/u, "Progress must identify the active comparison group");
+assert.match(progressViewSource, /contextLabel:\s*root\.comparison\.label/u, "Progress charts must carry the active comparison label");
+assert.match(progressViewSource, /initialComparison:\s*null/u, "Progress must be able to restore its comparison filters");
 for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);

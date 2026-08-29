@@ -6,6 +6,7 @@ import qs.Commons
 import qs.Ui
 import "components"
 import "js/AdaptivePractice.js" as AdaptivePractice
+import "js/Progress.js" as Progress
 
 Item {
   id: root
@@ -16,6 +17,8 @@ Item {
   property string currentView: "setup"
   property var activeOptions: ({})
   property var currentResult: null
+  property var resultComparison: null
+  property var progressComparison: null
   property string confirmationAction: ""
 
   readonly property string pluginId: "leomoon-studios.omarchy-typing-test"
@@ -114,11 +117,28 @@ Item {
   function finishTest(result) {
     currentResult = result
     dataStore.appendResult(result)
+    resultComparison = comparisonForResult(result)
+    progressComparison = resultComparison
     currentView = "results"
   }
 
-  function showHistoricalResult(result) {
+  function comparisonForResult(result) {
+    if (!result) return null
+    var language = result.language === "fa" ? "fa" : "en"
+    var filters = {
+      durationSeconds: String(result.configuredDurationSeconds || 60),
+      mode: String(result.mode || "standard"),
+      category: String(result.category || "common"),
+      difficulty: String(result.difficulty || "mixed")
+    }
+    var rows = Progress.filterHistory(dataStore.history, language, "all", filters)
+    return Progress.comparisonContext(rows, language, "all", filters)
+  }
+
+  function showHistoricalResult(result, comparison) {
     currentResult = result
+    resultComparison = comparison && comparison.label ? comparison : comparisonForResult(result)
+    progressComparison = resultComparison
     activeOptions = {
       language: result.language || "en",
       durationSeconds: Number(result.configuredDurationSeconds || 60),
@@ -167,6 +187,7 @@ Item {
     id: resultsComponent
     ResultsView {
       result: root.currentResult
+      comparisonContext: root.resultComparison
       store: dataStore
       fontFamily: root.contentFontFamily
       onRepeatRequested: root.startTest(root.activeOptions)
@@ -183,9 +204,11 @@ Item {
     ProgressView {
       store: dataStore
       fontFamily: root.contentFontFamily
+      initialComparison: root.progressComparison
       onBackRequested: root.currentView = "setup"
       onHistoryRequested: root.currentView = "history"
-      onResultRequested: function(result) { root.showHistoricalResult(result) }
+      onComparisonUpdated: function(comparison) { root.progressComparison = comparison }
+      onResultRequested: function(result, comparison) { root.showHistoricalResult(result, comparison) }
     }
   }
 

@@ -17,9 +17,12 @@ Item {
   property string modeFilter: "standard"
   property string categoryFilter: "all"
   property string difficultyFilter: "all"
+  property var initialComparison: null
+  property bool initialized: false
   property var durationChoices: [{ value: "all", label: "All durations" }, { value: "60", label: "1 min" }]
   property var rows: []
   property var summary: ({ count: 0, currentWpm: null, wpmChange: null, accuracy: null, bestWpm: null })
+  property var comparison: ({ label: "", count: 0, bestWpm: null })
   property var speedPoints: []
   property var accuracyPoints: []
   property var consistencyPoints: []
@@ -51,7 +54,8 @@ Item {
 
   signal backRequested()
   signal historyRequested()
-  signal resultRequested(var result)
+  signal resultRequested(var result, var comparison)
+  signal comparisonUpdated(var comparison)
 
   focus: true
 
@@ -96,14 +100,16 @@ Item {
     }
     store.historyRevision
     durationChoices = Progress.durationOptions(store.history, language, store.settings.defaultDurationSeconds)
-    var selectedRows = Progress.filterHistory(store.history, language, range, {
+    var filters = {
       durationSeconds: durationFilter,
       mode: modeFilter,
       category: categoryFilter,
       difficulty: difficultyFilter
-    })
+    }
+    var selectedRows = Progress.filterHistory(store.history, language, range, filters)
     rows = selectedRows
     summary = Progress.summary(selectedRows)
+    comparison = Progress.comparisonContext(selectedRows, language, range, filters)
     speedPoints = Progress.metricPoints(selectedRows, "netWpm", 120)
     accuracyPoints = Progress.metricPoints(selectedRows, "accuracy", 120)
     consistencyPoints = Progress.metricPoints(selectedRows, "consistency", 120)
@@ -115,19 +121,18 @@ Item {
     }
     if (!found) selectedCharacter = characterChoices.length > 0 ? characterChoices[0].character : ""
     selectedCharacterPoints = Progress.characterTrend(selectedRows, selectedCharacter, 120)
+    if (initialized) comparisonUpdated(comparison)
   }
 
   function chooseLanguage(value) {
     language = value === "fa" ? "fa" : "en"
     if ((language === "fa" && categoryFilter === "programming")
         || (language === "en" && categoryFilter === "formal")) categoryFilter = "all"
-    rebuild()
   }
 
   function chooseRange(value) {
     range = value
     if (store) store.saveSettings({ progressRange: value })
-    rebuild()
   }
 
   function chooseCharacter(value) {
@@ -136,17 +141,28 @@ Item {
   }
 
   function openPoint(point) {
-    if (point && point.result) resultRequested(point.result)
+    if (point && point.result) resultRequested(point.result, comparison)
   }
 
   onStoreChanged: rebuild()
   onLanguageChanged: rebuild()
+  onRangeChanged: rebuild()
   onDurationFilterChanged: rebuild()
   onModeFilterChanged: rebuild()
   onCategoryFilterChanged: rebuild()
   onDifficultyFilterChanged: rebuild()
   Connections { target: root.store; function onHistoryRevisionChanged() { root.rebuild() } }
   Component.onCompleted: {
+    var restored = initialComparison
+    if (restored && restored.label) {
+      language = restored.language === "fa" ? "fa" : "en"
+      range = String(restored.range || "all")
+      durationFilter = String(restored.durationSeconds === undefined ? "all" : restored.durationSeconds)
+      modeFilter = String(restored.mode || "all")
+      categoryFilter = String(restored.category || "all")
+      difficultyFilter = String(restored.difficulty || "all")
+    }
+    initialized = true
     rebuild()
     Qt.callLater(function() { root.forceActiveFocus() })
   }
@@ -289,6 +305,43 @@ Item {
         }
       }
 
+      BorderSurface {
+        Layout.fillWidth: true
+        Layout.preferredHeight: activeComparisonContent.implicitHeight + contentTopInset + contentBottomInset
+        color: Style.normalFillFor(Color.foreground, Color.accent)
+        borderSpec: Border.controlSpec("normal", Color.accent, Color.accent)
+        radius: Style.cornerRadius
+        padding: Style.spacing.md
+
+        ColumnLayout {
+          id: activeComparisonContent
+          anchors.fill: parent
+          anchors.topMargin: parent.contentTopInset
+          anchors.rightMargin: parent.contentRightInset
+          anchors.bottomMargin: parent.contentBottomInset
+          anchors.leftMargin: parent.contentLeftInset
+          spacing: Style.spacing.xs
+
+          Text {
+            text: "ACTIVE COMPARISON"
+            color: Color.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            Layout.fillWidth: true
+          }
+
+          Text {
+            text: root.comparison.label || "No comparison selected"
+            color: Color.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+          }
+        }
+      }
+
       GridLayout {
         columns: width >= Style.space(760) ? 5 : 2
         columnSpacing: Style.spacing.sm
@@ -323,10 +376,10 @@ Item {
         rowSpacing: Style.spacing.md
         Layout.fillWidth: true
 
-        ProgressChart { title: "Net WPM"; suffix: " WPM"; fontFamily: root.fontFamily; points: root.speedPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
-        ProgressChart { title: "Accuracy"; suffix: "%"; fontFamily: root.fontFamily; points: root.accuracyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
-        ProgressChart { title: "Consistency"; suffix: "%"; fontFamily: root.fontFamily; points: root.consistencyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
-        ProgressChart { title: "Error rate"; suffix: "%"; fontFamily: root.fontFamily; points: root.errorPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); lineColor: Color.urgent; onPointActivated: function(point) { root.openPoint(point) } }
+        ProgressChart { title: "Net WPM"; contextLabel: root.comparison.label; suffix: " WPM"; fontFamily: root.fontFamily; points: root.speedPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
+        ProgressChart { title: "Accuracy"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.accuracyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
+        ProgressChart { title: "Consistency"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.consistencyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
+        ProgressChart { title: "Error rate"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.errorPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); lineColor: Color.urgent; onPointActivated: function(point) { root.openPoint(point) } }
       }
 
       ColumnLayout {
@@ -366,6 +419,7 @@ Item {
 
         ProgressChart {
           title: root.selectedCharacter ? "Error rate for " + root.selectedCharacter : "Character error rate"
+          contextLabel: root.comparison.label
           suffix: "%"
           fontFamily: root.fontFamily
           points: root.selectedCharacterPoints

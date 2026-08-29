@@ -9,6 +9,7 @@ import "../js/Coaching.js" as Coaching
 Item {
   id: root
   property var result: null
+  property var comparisonContext: null
   property var store: null
   property string fontFamily: Style.font.family
   readonly property var adaptiveAnalysis: {
@@ -48,6 +49,15 @@ Item {
     if (character === "\t") return "Tab"
     if (character === "\n") return "Enter"
     return character
+  }
+
+  function comparisonDetail() {
+    if (!comparisonContext || !comparisonContext.label) return ""
+    var count = Math.max(0, Number(comparisonContext.count) || 0)
+    var text = count + " matching test" + (count === 1 ? "" : "s")
+    if (comparisonContext.bestWpm !== null && comparisonContext.bestWpm !== undefined)
+      text += "  ·  Scoped PB " + Number(comparisonContext.bestWpm).toFixed(1) + " WPM"
+    return text
   }
 
   function sourceCharacterStats(value) {
@@ -146,6 +156,52 @@ Item {
         MetricCard { prominent: true; fontFamily: root.fontFamily; label: "Net speed"; value: Number(root.value("netWpm", 0)).toFixed(1) + " WPM"; valueColor: Color.accent; Layout.fillWidth: true }
         MetricCard { prominent: true; fontFamily: root.fontFamily; label: "Accuracy"; value: Number(root.value("accuracy", 0)).toFixed(1) + "%"; Layout.fillWidth: true }
         MetricCard { prominent: true; fontFamily: root.fontFamily; label: "Consistency"; value: root.value("consistency", null) === null ? "—" : Number(root.value("consistency", 0)).toFixed(1) + "%"; Layout.fillWidth: true }
+      }
+
+      BorderSurface {
+        visible: root.comparisonContext && root.comparisonContext.label
+        Layout.fillWidth: true
+        Layout.preferredHeight: comparisonContent.implicitHeight + contentTopInset + contentBottomInset
+        color: Style.normalFillFor(Color.foreground, Color.accent)
+        borderSpec: Border.controlSpec("normal", Color.accent, Color.accent)
+        radius: Style.cornerRadius
+        padding: Style.spacing.md
+
+        ColumnLayout {
+          id: comparisonContent
+          anchors.fill: parent
+          anchors.topMargin: parent.contentTopInset
+          anchors.rightMargin: parent.contentRightInset
+          anchors.bottomMargin: parent.contentBottomInset
+          anchors.leftMargin: parent.contentLeftInset
+          spacing: Style.spacing.xs
+
+          Text {
+            text: "PROGRESS COMPARISON"
+            color: Color.accent
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+            Layout.fillWidth: true
+          }
+
+          Text {
+            text: root.comparisonContext ? String(root.comparisonContext.label || "") : ""
+            color: Color.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+          }
+
+          Text {
+            text: root.comparisonDetail()
+            color: Color.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            Layout.fillWidth: true
+          }
+        }
       }
 
       BorderSurface {

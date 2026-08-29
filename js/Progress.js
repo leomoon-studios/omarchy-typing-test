@@ -71,6 +71,77 @@ function durationOptions(history, language, preferredDuration) {
   return result
 }
 
+function comparisonDurationLabel(value) {
+  if (value === undefined || value === null || String(value) === "all") return "All durations"
+  var seconds = Math.max(15, Math.round(finiteNumber(value, 60)))
+  if (seconds < 60) return seconds + " sec"
+  if (seconds % 60 === 0) return (seconds / 60) + " min"
+  return Math.floor(seconds / 60) + "m " + (seconds % 60) + "s"
+}
+
+function comparisonModeLabel(value) {
+  var mode = String(value || "all")
+  if (mode === "standard") return "Standard"
+  if (mode === "adaptive") return "Adaptive"
+  return "All modes"
+}
+
+function comparisonCategoryLabel(value) {
+  var category = String(value || "all")
+  var labels = {
+    all: "All content",
+    common: "Common",
+    formal: "Formal",
+    literature: "Literature",
+    programming: "Programming",
+    punctuation: "Numbers & punctuation",
+    difficult: "Difficult-character practice",
+    custom: "Imported",
+    mixed: "Mixed content"
+  }
+  return labels[category] || category.replace(/[-_]/g, " ")
+}
+
+function comparisonDifficultyLabel(value) {
+  var difficulty = String(value || "all")
+  if (difficulty === "1") return "Easy"
+  if (difficulty === "2") return "Medium"
+  if (difficulty === "3") return "Hard"
+  if (difficulty === "mixed") return "Mixed difficulty"
+  return "All difficulties"
+}
+
+function comparisonRangeLabel(value) {
+  if (value === "7-tests") return "Last 7 tests"
+  if (value === "30-tests") return "Last 30 tests"
+  return "All history"
+}
+
+function comparisonContext(rows, language, range, filters) {
+  var selected = filters || {}
+  var metrics = summary(rows)
+  var context = {
+    language: language === "fa" ? "fa" : "en",
+    range: range === "7-tests" || range === "30-tests" ? range : "all",
+    durationSeconds: selected.durationSeconds === undefined || selected.durationSeconds === null
+      ? "all" : String(selected.durationSeconds),
+    mode: String(selected.mode || "all"),
+    category: String(selected.category || "all"),
+    difficulty: String(selected.difficulty || "all"),
+    count: metrics.count,
+    bestWpm: metrics.bestWpm
+  }
+  context.label = [
+    context.language === "fa" ? "Parsi" : "English",
+    comparisonDurationLabel(context.durationSeconds),
+    comparisonModeLabel(context.mode),
+    comparisonCategoryLabel(context.category),
+    comparisonDifficultyLabel(context.difficulty),
+    comparisonRangeLabel(context.range)
+  ].join(" · ")
+  return context
+}
+
 function errorRate(result) {
   var correct = Math.max(0, finiteNumber(result && result.correctKeystrokes, 0))
   var incorrect = Math.max(0, finiteNumber(result && result.incorrectKeystrokes, 0))

@@ -7,6 +7,7 @@ BorderSurface {
   id: root
 
   property string title: "Progress"
+  property string contextLabel: ""
   property string suffix: ""
   property string fontFamily: Style.font.family
   property var points: []
@@ -161,9 +162,12 @@ BorderSurface {
 
     Text {
       readonly property var point: root.selectedPoint()
-      text: point && point.completedAt
-        ? new Date(point.completedAt).toLocaleDateString(Qt.locale(), "yyyy-MM-dd") + "  ·  Enter opens result"
-        : root.points && root.points.length === 1 ? "More tests are needed to draw a trend." : "No compatible data."
+      text: {
+        var detail = point && point.completedAt
+          ? new Date(point.completedAt).toLocaleDateString(Qt.locale(), "yyyy-MM-dd") + "  ·  Enter opens result"
+          : root.points && root.points.length === 1 ? "More tests are needed to draw a trend." : "No compatible data."
+        return root.contextLabel ? root.contextLabel + "  ·  " + detail : detail
+      }
       color: Color.muted
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
