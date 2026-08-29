@@ -113,6 +113,15 @@ function targetsForHand(data, hand) {
   return rankedTargets(data, function(item) { return item.hand === hand }, false, 32)
 }
 
+function targetsForKey(data, character) {
+  var value = String(character || "")
+  var source = data && Array.isArray(data.keys) ? data.keys : []
+  for (var index = 0; index < source.length; index++) {
+    if (source[index].character === value) return [value]
+  }
+  return []
+}
+
 function targetsForFinger(data, finger) {
   return rankedTargets(data, function(item) { return item.finger === finger }, false, 32)
 }

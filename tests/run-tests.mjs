@@ -17,6 +17,23 @@ function qmlLibrary(relativePath, extras = {}) {
   return context;
 }
 
+function qmlFunctionSource(relativePath, functionName) {
+  const source = fs.readFileSync(path.join(root, relativePath), "utf8");
+  const marker = `function ${functionName}(`;
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `${relativePath} is missing ${functionName}()`);
+  const bodyStart = source.indexOf("{", start);
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index++) {
+    if (source[index] === "{") depth++;
+    else if (source[index] === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  throw new Error(`Could not parse ${functionName}() from ${relativePath}`);
+}
+
 const Normalization = qmlLibrary("js/Normalization.js");
 const Metrics = qmlLibrary("js/Metrics.js", { Normalization });
 const PassageLoader = qmlLibrary("js/PassageLoader.js");
@@ -142,6 +159,35 @@ assert.equal(keyTimingStats[0].errorRate, 0.25);
 assert.equal(keyTimingStats[0].averageIntervalMs, 250);
 assert.equal(keyTimingStats[0].speedCpm, 240);
 assert.equal(keyTimingStats[1].character, "x");
+const parsiPatternEvents = [
+  { position: 1, expected: "ب", actual: "پ", corrected: false, firstAttempt: true },
+  { position: 4, expected: "ب", actual: "پ", corrected: false, firstAttempt: true }
+];
+const parsiReachedPositions = Object.fromEntries(Array.from({ length: 5 }, (_, index) => [index, true]));
+const parsiDifficultBigrams = Metrics.difficultBigrams("شب شب", parsiPatternEvents, parsiReachedPositions, {}, true, 24);
+assert.equal(parsiDifficultBigrams[0].bigram, "شب");
+assert.equal(parsiDifficultBigrams[0].opportunities, 2);
+assert.equal(parsiDifficultBigrams[0].firstAttemptErrors, 2);
+const parsiPatternWords = Metrics.difficultWords("شب شب", parsiPatternEvents, parsiReachedPositions, {}, true, 24);
+assert.equal(parsiPatternWords[0].word, "شب");
+assert.equal(parsiPatternWords[0].opportunities, 2);
+assert.equal(parsiPatternWords[0].errorOccurrences, 2);
+const parsiHesitations = Metrics.hesitationStats([
+  { character: "ي", delayMs: 1200 },
+  { character: "ی", delayMs: 1800 }
+], { persianNormalization: "forgiving" }, 24);
+assert.equal(parsiHesitations[0].character, "ی");
+assert.equal(parsiHesitations[0].count, 2);
+assert.equal(parsiHesitations[0].averageDelayMs, 1500);
+const parsiKeyTimings = Metrics.keyTimingStats([
+  { character: "ي", intervalMs: 400 },
+  { character: "ی", intervalMs: 600 }
+], [{ expected: "ی", firstAttempt: true }], { "ی": 4 }, { persianNormalization: "forgiving" });
+assert.equal(parsiKeyTimings[0].character, "ی");
+assert.equal(parsiKeyTimings[0].opportunities, 4);
+assert.equal(parsiKeyTimings[0].averageIntervalMs, 500);
+assert.equal(parsiKeyTimings[0].speedCpm, 120);
+assert.equal(parsiKeyTimings[0].errorRate, 0.25);
 
 const parsed = PassageLoader.parseJsonLines('{"id":"one","language":"en","text":"Hello"}\nnot-json\n{"id":"empty","language":"en","text":"   "}\n{"id":"two","language":"fa","text":"سلام"}\n');
 assert.equal(parsed.length, 2);
@@ -414,6 +460,20 @@ const persianWordBuild = PassageLoader.buildWordTest([
   { id: "fa-words", language: "fa", category: "common", difficulty: 1, text: "یک دو سه چهار پنج شش هفت هشت نه ده" }
 ], "fa", "common", 1, 10);
 assert.equal(persianWordBuild.text.split(/\s+/u).length, 10);
+for (const targetWordCount of [10, 25, 50, 100]) {
+  const parsiCompletionBuild = PassageLoader.buildWordTest([
+    { id: "fa-session-a", language: "fa", category: "common", difficulty: 1, text: "یک دو سه چهار پنج شش" },
+    { id: "fa-session-b", language: "fa", category: "common", difficulty: 1, text: "هفت هشت نه ده یازده دوازده" }
+  ], "fa", "common", 1, targetWordCount, () => 0.25);
+  assert.equal(parsiCompletionBuild.text.trim().split(/\s+/u).length, targetWordCount);
+  assert.equal(parsiCompletionBuild.wordCount, targetWordCount);
+}
+const parsiPassageBuild = PassageLoader.buildPassageTest([
+  { id: "fa-passage-a", language: "fa", category: "literature", difficulty: 2, text: "شب آرامی بود و شهر در سکوت نفس می‌کشید." },
+  { id: "fa-passage-b", language: "fa", category: "literature", difficulty: 2, text: "باران روی پنجره می‌بارید." }
+], "fa", "literature", 2, () => 0.999);
+assert.equal(parsiPassageBuild.text, "شب آرامی بود و شهر در سکوت نفس می‌کشید.");
+assert.deepEqual(Array.from(parsiPassageBuild.passageIds), ["fa-passage-a"]);
 const retrySources = [
   { id: "retry-a", language: "en", category: "common", difficulty: 1, text: "First  passage keeps its spacing." },
   { id: "retry-b", language: "en", category: "common", difficulty: 1, text: "Second passage follows exactly." }
@@ -434,6 +494,29 @@ const removedImportRetry = PassageLoader.buildRetryTest(retrySources, ["custom-e
 assert.equal(removedImportRetry.available, false);
 assert.deepEqual(Array.from(removedImportRetry.missingPassageIds), ["custom-en-removed-1"]);
 assert.equal(PassageLoader.buildRetryTest(retrySources, [], "timed", 0).available, false);
+const freshPassageA = PassageLoader.buildPassageTest(retrySources, "en", "common", 1, () => 0);
+const freshPassageB = PassageLoader.buildPassageTest(retrySources, "en", "common", 1, () => 0.999999);
+assert.notEqual(freshPassageA.passageIds[0], freshPassageB.passageIds[0],
+  "new passage with the same settings must still perform a fresh selection");
+const parsiRetrySources = [
+  { id: "retry-fa-a", language: "fa", category: "common", difficulty: 1, text: "یک دو سه چهار پنج شش هفت هشت نه ده" },
+  { id: "retry-fa-b", language: "fa", category: "common", difficulty: 1, text: "یازده دوازده سیزده چهارده پانزده شانزده هفده هجده نوزده بیست" }
+];
+const parsiTimedRetry = PassageLoader.buildRetryTest(parsiRetrySources, ["retry-fa-b", "retry-fa-a"], "timed", 0);
+assert.equal(parsiTimedRetry.available, true);
+assert.equal(parsiTimedRetry.text, `${parsiRetrySources[1].text} ${parsiRetrySources[0].text}`);
+assert.deepEqual(Array.from(parsiTimedRetry.passageIds), ["retry-fa-b", "retry-fa-a"]);
+const parsiWordRetry = PassageLoader.buildRetryTest(parsiRetrySources, ["retry-fa-a", "retry-fa-b"], "words", 10);
+assert.equal(parsiWordRetry.available, true);
+assert.equal(parsiWordRetry.text, parsiRetrySources[0].text);
+const parsiPassageRetry = PassageLoader.buildRetryTest(parsiRetrySources, ["retry-fa-b"], "passage", 0);
+assert.equal(parsiPassageRetry.text, parsiRetrySources[1].text);
+assert.deepEqual(Array.from(parsiPassageRetry.passageIds), ["retry-fa-b"]);
+const partialMissingParsiRetry = PassageLoader.buildRetryTest(parsiRetrySources,
+  ["retry-fa-a", "removed-fa-import"], "timed", 0);
+assert.equal(partialMissingParsiRetry.available, false);
+assert.equal(partialMissingParsiRetry.text, "");
+assert.deepEqual(Array.from(partialMissingParsiRetry.missingPassageIds), ["removed-fa-import"]);
 
 function adaptiveResult(id, language, character, opportunities, errors, passageIds = []) {
   return {
@@ -537,6 +620,30 @@ const aggregateAdaptiveBuild = AdaptivePractice.buildAdaptiveTest([
   settings: defaultSettings
 });
 assert.equal(aggregateAdaptiveBuild.passageIds[0], "high-pattern");
+const parsiAggregateHistory = [0, 1, 2].map(index => ({
+  id: `fa-aggregate-${index}`,
+  language: "fa",
+  completedAt: `2026-08-${17 - index}T12:00:00.000Z`,
+  characterStats: [],
+  difficultBigrams: [{ bigram: "شب", opportunities: 4, firstAttemptErrors: 2, totalErrors: 2 }],
+  difficultWords: [{ word: "شب", opportunities: 2, errorOccurrences: 1, totalErrors: 1 }],
+  hesitationStats: [{ character: "ش", count: 2, totalDelayMs: 3200, averageDelayMs: 1600, maxDelayMs: 1800 }]
+}));
+const parsiAggregateTargets = AdaptivePractice.rankTargets(parsiAggregateHistory, "fa", defaultSettings);
+assert.equal(parsiAggregateTargets.available, true);
+assert.deepEqual(Array.from(parsiAggregateTargets.bigrams), ["شب"]);
+assert.deepEqual(Array.from(parsiAggregateTargets.words), ["شب"]);
+assert.deepEqual(Array.from(parsiAggregateTargets.hesitationCharacters), ["ش"]);
+const parsiAggregateBuild = AdaptivePractice.buildAdaptiveTest([
+  { id: "fa-low-pattern", language: "fa", category: "common", text: "روز روشن و آرامی در شهر آغاز شد." },
+  { id: "fa-high-pattern", language: "fa", category: "literature", text: "شب آرام بود و شبنم شبانه روی شیشه نشست." }
+], "fa", [], 300, [], {
+  bigrams: parsiAggregateTargets.bigrams,
+  words: parsiAggregateTargets.words,
+  hesitationCharacters: parsiAggregateTargets.hesitationCharacters,
+  settings: defaultSettings
+});
+assert.equal(parsiAggregateBuild.passageIds[0], "fa-high-pattern");
 
 const progressNewest = [];
 for (let index = 10; index >= 1; index--) {
@@ -610,6 +717,35 @@ assert.equal(progressCharacters[0].character, "e");
 assert.equal(Progress.characterTrend(progressSeven, "e", 120).length, 7);
 assert.deepEqual(Array.from(Progress.filterHistory(null, "en", "all")), []);
 assert.equal(Progress.summary(null).count, 0);
+const parsiScopedProgress = [
+  { id: "fa-scope-match", completedAt: "2026-08-20T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "formal", difficulty: "2", netWpm: 48 },
+  { id: "fa-scope-duration", completedAt: "2026-08-19T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 180, mode: "standard", category: "formal", difficulty: "2", netWpm: 52 },
+  { id: "fa-scope-mode", completedAt: "2026-08-18T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 60, mode: "adaptive", category: "formal", difficulty: "2", netWpm: 50 },
+  { id: "fa-scope-category", completedAt: "2026-08-17T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "literature", difficulty: "2", netWpm: 51 },
+  { id: "fa-scope-difficulty", completedAt: "2026-08-16T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "formal", difficulty: "3", netWpm: 53 },
+  { id: "en-not-parsi", completedAt: "2026-08-21T12:00:00.000Z", language: "en", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "formal", difficulty: "2", netWpm: 99 }
+];
+const exactParsiScope = Progress.filterHistory(parsiScopedProgress, "fa", "all", {
+  testType: "timed", durationSeconds: "60", mode: "standard", category: "formal", difficulty: "2"
+});
+assert.deepEqual(Array.from(exactParsiScope, row => row.id), ["fa-scope-match"]);
+const exactParsiComparison = Progress.comparisonContext(exactParsiScope, "fa", "all", {
+  testType: "timed", durationSeconds: "60", mode: "standard", category: "formal", difficulty: "2"
+});
+assert.equal(exactParsiComparison.label, "Parsi · 1 min · Standard · Formal · Medium · All history");
+assert.equal(exactParsiComparison.bestWpm, 48);
+const dataStoreScopeContext = vm.createContext({ history: parsiScopedProgress });
+for (const functionName of ["matchesScope", "best", "averageAccuracy"]) {
+  vm.runInContext(qmlFunctionSource("DataStore.qml", functionName), dataStoreScopeContext);
+}
+const parsiPersonalBest = vm.runInContext(`best("fa", {
+  testType: "timed", durationSeconds: 60, mode: "standard", category: "formal", difficulty: "2"
+})`, dataStoreScopeContext);
+assert.equal(parsiPersonalBest, 48);
+const excludedEnglishBest = vm.runInContext(`best("en", {
+  testType: "timed", durationSeconds: 60, mode: "standard", category: "formal", difficulty: "2"
+})`, dataStoreScopeContext);
+assert.equal(excludedEnglishBest, 99);
 
 const englishLayout = KeyboardHeatmap.layout("en");
 assert.equal(englishLayout.length, 3);
@@ -646,6 +782,8 @@ assert.equal(englishHeatmap.keys.find(key => key.character === "x").opportunitie
 assert.equal(englishHeatmap.keys.find(key => key.character === "x").timedAttempts, 0);
 assert.equal(englishHeatmap.keys.find(key => key.character === "ی"), undefined);
 assert.equal(KeyboardHeatmap.weakestTargets(englishHeatmap)[0], "q");
+assert.deepEqual(Array.from(KeyboardHeatmap.targetsForKey(englishHeatmap, "e")), ["e"]);
+assert.deepEqual(Array.from(KeyboardHeatmap.targetsForKey(englishHeatmap, "ی")), []);
 assert.equal(KeyboardHeatmap.targetsForHand(englishHeatmap, "left").every(character =>
   englishHeatmap.keys.find(key => key.character === character).hand === "left"), true);
 assert.equal(KeyboardHeatmap.targetsForFinger(englishHeatmap, "left-middle").every(character =>
@@ -656,6 +794,27 @@ assert.equal(KeyboardHeatmap.targetsForFinger(englishHeatmap, "left-index").leng
   englishHeatmap.keys.filter(key => key.finger === "left-index").length);
 assert.equal(KeyboardHeatmap.weakestTargets(englishHeatmap).length <= 5, true);
 assert.equal(KeyboardHeatmap.weakestTargets(KeyboardHeatmap.aggregate([], "en")).length, 0);
+const parsiHeatmap = KeyboardHeatmap.aggregate([{
+  language: "fa",
+  keyTimingStats: [
+    { character: "ش", opportunities: 12, firstAttemptErrors: 5, totalErrors: 6, timedAttempts: 6, totalIntervalMs: 3600 },
+    { character: "ی", opportunities: 20, firstAttemptErrors: 2, totalErrors: 2, timedAttempts: 10, totalIntervalMs: 4000 },
+    { character: "م", opportunities: 10, firstAttemptErrors: 1, totalErrors: 1, timedAttempts: 5, totalIntervalMs: 1500 }
+  ]
+}], "fa");
+const sheenHeat = parsiHeatmap.keys.find(key => key.character === "ش");
+assert.equal(sheenHeat.opportunities, 12);
+assert.equal(sheenHeat.errorRate, 5 / 12);
+assert.equal(sheenHeat.speedCpm, 100);
+assert.equal(KeyboardHeatmap.weakestTargets(parsiHeatmap)[0], "ش");
+assert.deepEqual(Array.from(KeyboardHeatmap.targetsForKey(parsiHeatmap, "ش")), ["ش"]);
+assert.deepEqual(Array.from(KeyboardHeatmap.targetsForKey(parsiHeatmap, "e")), []);
+assert.equal(KeyboardHeatmap.targetsForHand(parsiHeatmap, "right").every(character =>
+  parsiHeatmap.keys.find(key => key.character === character).hand === "right"), true);
+assert.equal(KeyboardHeatmap.targetsForFinger(parsiHeatmap, "left-middle").every(character =>
+  parsiHeatmap.keys.find(key => key.character === character).finger === "left-middle"), true);
+assert.equal(KeyboardHeatmap.targetsForHand(parsiHeatmap, "right").length,
+  parsiHeatmap.keys.filter(key => key.hand === "right").length);
 
 const coachingResult = {
   ...progressNewest[0],
@@ -851,6 +1010,7 @@ assert.match(keyboardHeatmapSource, /CPM/u, "heatmap keys must display per-key s
 assert.match(keyboardHeatmapSource, /tries/u, "heatmap keys must display opportunity counts");
 assert.match(keyboardHeatmapSource, /% err/u, "heatmap keys must display error rate");
 assert.match(keyboardHeatmapSource, /targetsForHand/u, "heatmap must support hand drills");
+assert.match(keyboardHeatmapSource, /targetsForKey/u, "heatmap must support individual-key drills");
 assert.match(keyboardHeatmapSource, /targetsForFinger/u, "heatmap must support finger drills");
 assert.match(keyboardHeatmapSource, /weakestTargets/u, "heatmap must support weak-key drills");
 assert.match(keyboardHeatmapSource, /uniformCellWidths:\s*true/u,

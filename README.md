@@ -204,6 +204,16 @@ Run logic and corpus tests:
 node tests/run-tests.mjs
 ```
 
+Run the isolated English and Parsi high-priority session scenarios through the
+real QML `TestView`:
+
+```bash
+tests/run-high-priority-sessions.sh
+```
+
+The complete feature-by-feature verification matrix is in
+[`tests/HIGH_PRIORITY_VERIFICATION.md`](tests/HIGH_PRIORITY_VERIFICATION.md).
+
 ## Licensing
 
 The plugin source is MIT licensed. The bundled passage corpus is dedicated

@@ -128,15 +128,18 @@ BorderSurface {
             }
 
             Keys.onReturnPressed: function(event) {
-              root.startDrill([keySurface.modelData.character], "Key " + keySurface.modelData.character)
+              root.startDrill(Heatmap.targetsForKey(root.heatmapData, keySurface.modelData.character),
+                "Key " + keySurface.modelData.character)
               event.accepted = true
             }
             Keys.onEnterPressed: function(event) {
-              root.startDrill([keySurface.modelData.character], "Key " + keySurface.modelData.character)
+              root.startDrill(Heatmap.targetsForKey(root.heatmapData, keySurface.modelData.character),
+                "Key " + keySurface.modelData.character)
               event.accepted = true
             }
             Keys.onSpacePressed: function(event) {
-              root.startDrill([keySurface.modelData.character], "Key " + keySurface.modelData.character)
+              root.startDrill(Heatmap.targetsForKey(root.heatmapData, keySurface.modelData.character),
+                "Key " + keySurface.modelData.character)
               event.accepted = true
             }
 
@@ -147,7 +150,8 @@ BorderSurface {
               cursorShape: Qt.PointingHandCursor
               onClicked: {
                 keySurface.forceActiveFocus()
-                root.startDrill([keySurface.modelData.character], "Key " + keySurface.modelData.character)
+                root.startDrill(Heatmap.targetsForKey(root.heatmapData, keySurface.modelData.character),
+                  "Key " + keySurface.modelData.character)
               }
             }
           }
