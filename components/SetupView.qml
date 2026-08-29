@@ -13,7 +13,9 @@ Item {
     property string fontFamily: Style.font.family
     property string mode: "standard"
     property string language: store ? String(store.settings.defaultLanguage || "en") : "en"
+    property string testType: store ? String(store.settings.defaultTestType || "timed") : "timed"
     property int durationSeconds: store ? Number(store.settings.defaultDurationSeconds || 60) : 60
+    property int wordCount: store ? Number(store.settings.defaultWordCount || 25) : 25
     property string category: store ? String(store.settings.defaultCategory || "common") : "common"
     property string difficulty: store ? String(store.settings.defaultDifficulty || "mixed") : "mixed"
     property int customSeconds: Math.max(15, durationSeconds)
@@ -90,11 +92,19 @@ Item {
 
     }
 
+    function chooseTestType(value) {
+        testType = value;
+        if (testType === "passage")
+            mode = "standard";
+    }
+
     function start() {
         var selectedDuration = durationSeconds === 0 ? customSeconds : durationSeconds;
         var values = {
             "language": language,
-            "durationSeconds": selectedDuration,
+            "testType": testType,
+            "durationSeconds": testType === "timed" ? selectedDuration : 0,
+            "targetWordCount": testType === "words" ? wordCount : 0,
             "category": category,
             "difficulty": difficulty,
             "mode": mode,
@@ -106,7 +116,9 @@ Item {
         if (store)
             store.saveSettings({
             "defaultLanguage": language,
+            "defaultTestType": testType,
             "defaultDurationSeconds": selectedDuration,
+            "defaultWordCount": wordCount,
             "defaultCategory": category,
             "defaultDifficulty": difficulty
         });
@@ -141,12 +153,56 @@ Item {
         }
 
         Text {
-            text: "The timer starts with your first character. Results stay on this computer."
+            text: root.testType === "timed"
+                ? "The countdown starts with your first character. Results stay on this computer."
+                : "Elapsed time starts with your first character. Finish the text to complete the test."
             color: Color.muted
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             Layout.fillWidth: true
             wrapMode: Text.WordWrap
+        }
+
+        Text {
+            text: "TEST FORMAT"
+            color: Color.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            font.bold: true
+        }
+
+        RowLayout {
+            spacing: Style.spacing.sm
+
+            Button {
+                text: "Timed"
+                fontFamily: root.fontFamily
+                selected: root.testType === "timed"
+                bordered: true
+                focusable: true
+                Layout.preferredWidth: Style.space(110)
+                onClicked: root.chooseTestType("timed")
+            }
+
+            Button {
+                text: "Words"
+                fontFamily: root.fontFamily
+                selected: root.testType === "words"
+                bordered: true
+                focusable: true
+                Layout.preferredWidth: Style.space(110)
+                onClicked: root.chooseTestType("words")
+            }
+
+            Button {
+                text: "Passage"
+                fontFamily: root.fontFamily
+                selected: root.testType === "passage"
+                bordered: true
+                focusable: true
+                Layout.preferredWidth: Style.space(110)
+                onClicked: root.chooseTestType("passage")
+            }
         }
 
         Text {
@@ -177,6 +233,7 @@ Item {
                 bordered: true
                 focusable: true
                 Layout.preferredWidth: Style.space(180)
+                enabled: root.testType !== "passage"
                 onClicked: root.mode = "adaptive"
             }
         }
@@ -269,7 +326,8 @@ Item {
         }
 
         Text {
-            text: "DURATION"
+            text: root.testType === "timed" ? "DURATION"
+                : root.testType === "words" ? "WORD COUNT" : "COMPLETION"
             color: Color.muted
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -277,6 +335,7 @@ Item {
         }
 
         RowLayout {
+            visible: root.testType === "timed"
             spacing: Style.spacing.sm
 
             Repeater {
@@ -328,6 +387,35 @@ Item {
                 }
             }
 
+        }
+
+        RowLayout {
+            visible: root.testType === "words"
+            spacing: Style.spacing.sm
+
+            Repeater {
+                model: [10, 25, 50, 100]
+
+                Button {
+                    required property int modelData
+                    text: modelData + " words"
+                    fontFamily: root.fontFamily
+                    selected: root.wordCount === modelData
+                    bordered: true
+                    focusable: true
+                    onClicked: root.wordCount = modelData
+                }
+            }
+        }
+
+        Text {
+            visible: root.testType === "passage"
+            text: "Complete one full passage. There is no countdown timer."
+            color: Color.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
         }
 
         RowLayout {

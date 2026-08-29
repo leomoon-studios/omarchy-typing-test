@@ -50,9 +50,11 @@ QtObject {
 
   function defaultSettings() {
     return {
-      schemaVersion: 2,
+      schemaVersion: 3,
       defaultLanguage: "en",
+      defaultTestType: "timed",
       defaultDurationSeconds: 60,
+      defaultWordCount: 25,
       defaultCategory: "common",
       defaultDifficulty: "mixed",
       showLiveWpm: true,
@@ -172,9 +174,14 @@ QtObject {
   function matchesScope(row, language, scope) {
     if (!row || (language && row.language !== language)) return false
     var selected = scope || {}
+    var rowTestType = String(row.testType || "timed")
+    if (selected.testType && selected.testType !== "all" && rowTestType !== String(selected.testType)) return false
     if (selected.durationSeconds !== undefined && selected.durationSeconds !== null
         && String(selected.durationSeconds) !== "all"
-        && Number(row.configuredDurationSeconds || 0) !== Number(selected.durationSeconds)) return false
+        && (rowTestType !== "timed" || Number(row.configuredDurationSeconds || 0) !== Number(selected.durationSeconds))) return false
+    if (selected.targetWordCount !== undefined && selected.targetWordCount !== null
+        && String(selected.targetWordCount) !== "all"
+        && (rowTestType !== "words" || Number(row.targetWordCount || 0) !== Number(selected.targetWordCount))) return false
     if (selected.mode && selected.mode !== "all" && String(row.mode || "standard") !== String(selected.mode)) return false
     if (selected.category && selected.category !== "all" && String(row.category || "common") !== String(selected.category)) return false
     if (selected.difficulty && selected.difficulty !== "all" && String(row.difficulty || "mixed") !== String(selected.difficulty)) return false

@@ -160,7 +160,7 @@ function passageScore(passage, characters) {
   return unique * 4 + density
 }
 
-function buildAdaptiveTest(passages, language, targetCharacters, targetLength, avoidedIds) {
+function adaptiveCandidates(passages, language, targetCharacters, avoidedIds) {
   var characters = Array.isArray(targetCharacters) ? targetCharacters.slice(0, MAX_TARGETS) : []
   var avoided = Array.isArray(avoidedIds) ? avoidedIds : []
   var candidates = []
@@ -182,6 +182,13 @@ function buildAdaptiveTest(passages, language, targetCharacters, targetLength, a
     if (b.score !== a.score) return b.score - a.score
     return String(a.passage.id || "").localeCompare(String(b.passage.id || ""))
   })
+  return { candidates: candidates, characters: characters }
+}
+
+function buildAdaptiveTest(passages, language, targetCharacters, targetLength, avoidedIds) {
+  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds)
+  var candidates = ranked.candidates
+  var characters = ranked.characters
 
   var desired = Math.max(300, finiteNumber(targetLength, 1000))
   var text = ""
@@ -204,5 +211,33 @@ function buildAdaptiveTest(passages, language, targetCharacters, targetLength, a
     passageIds: ids,
     targetCharacters: characters,
     matchedPassages: candidates.filter(function(row) { return row.score > 0 }).length
+  }
+}
+
+function buildAdaptiveWordTest(passages, language, targetCharacters, targetWordCount, avoidedIds) {
+  var desiredWords = Math.max(1, Math.round(finiteNumber(targetWordCount, 25)))
+  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds)
+  var candidates = ranked.candidates
+  var selectedWords = []
+  var ids = []
+  var lastId = ""
+  var cursor = 0
+  while (candidates.length > 0 && selectedWords.length < desiredWords) {
+    var row = candidates[cursor % candidates.length]
+    cursor++
+    var id = String(row.passage.id || "")
+    if (candidates.length > 1 && id === lastId) continue
+    var passageWords = String(row.passage.text || "").trim().split(/\s+/)
+    if (passageWords.length === 1 && !passageWords[0]) continue
+    selectedWords = selectedWords.concat(passageWords.slice(0, desiredWords - selectedWords.length))
+    ids.push(id)
+    lastId = id
+  }
+  return {
+    text: selectedWords.join(" "),
+    passageIds: ids,
+    targetCharacters: ranked.characters,
+    matchedPassages: candidates.filter(function(candidate) { return candidate.score > 0 }).length,
+    wordCount: selectedWords.length
   }
 }

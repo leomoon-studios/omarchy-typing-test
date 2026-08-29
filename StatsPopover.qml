@@ -19,8 +19,15 @@ Panel {
     property int selectedAction: 0
     readonly property var latest: store.latest()
     readonly property string activeLanguage: String(store.settings.defaultLanguage || "en")
+    readonly property string comparisonTestType: String(store.settings.defaultTestType || "timed")
     readonly property int comparisonDuration: Number(store.settings.defaultDurationSeconds || 60)
-    readonly property var comparisonScope: ({ durationSeconds: comparisonDuration, mode: "standard" })
+    readonly property int comparisonWordCount: Number(store.settings.defaultWordCount || 25)
+    readonly property var comparisonScope: ({
+        testType: comparisonTestType,
+        durationSeconds: comparisonTestType === "timed" ? comparisonDuration : "all",
+        targetWordCount: comparisonTestType === "words" ? comparisonWordCount : "all",
+        mode: "standard"
+    })
     readonly property var bestWpm: store.best(activeLanguage, comparisonScope)
     readonly property var averageAccuracy: store.averageAccuracy(activeLanguage, comparisonScope)
     FontLoader {
@@ -63,7 +70,9 @@ Panel {
     }
 
     function comparisonLabel() {
-        return (activeLanguage === "fa" ? "PA" : "EN") + " · " + compactDuration(comparisonDuration) + " STD";
+        var format = comparisonTestType === "words" ? comparisonWordCount + "W"
+            : comparisonTestType === "passage" ? "PASSAGE" : compactDuration(comparisonDuration);
+        return (activeLanguage === "fa" ? "PA" : "EN") + " · " + format + " STD";
     }
 
     function moveVertical(direction) {

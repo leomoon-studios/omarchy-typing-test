@@ -59,14 +59,21 @@ function sanitizeSettings(value, defaults) {
 
   var duration = finiteInteger(input.defaultDurationSeconds, base.defaultDurationSeconds, 15, 3600)
   if (input.defaultDurationSeconds !== undefined && (!isFiniteNumberValue(input.defaultDurationSeconds) || Number(input.defaultDurationSeconds) !== duration)) issues.push("defaultDurationSeconds")
+  var allowedWordCounts = [10, 25, 50, 100]
+  var defaultWordCount = allowedWordCounts.indexOf(Number(base.defaultWordCount)) >= 0 ? Number(base.defaultWordCount) : 25
+  var wordCount = finiteInteger(input.defaultWordCount, defaultWordCount, 10, 100)
+  if (allowedWordCounts.indexOf(wordCount) < 0) wordCount = defaultWordCount
+  if (input.defaultWordCount !== undefined && (!isFiniteNumberValue(input.defaultWordCount) || Number(input.defaultWordCount) !== wordCount)) issues.push("defaultWordCount")
   var adaptiveWindow = finiteInteger(input.adaptiveHistoryWindow, base.adaptiveHistoryWindow, 5, 50)
   if (input.adaptiveHistoryWindow !== undefined && (!isFiniteNumberValue(input.adaptiveHistoryWindow) || Number(input.adaptiveHistoryWindow) !== adaptiveWindow)) issues.push("adaptiveHistoryWindow")
 
   return {
     value: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       defaultLanguage: checkedEnum("defaultLanguage", ["en", "fa"]),
+      defaultTestType: checkedEnum("defaultTestType", ["timed", "words", "passage"]),
       defaultDurationSeconds: duration,
+      defaultWordCount: wordCount,
       defaultCategory: checkedEnum("defaultCategory", ["common", "literature", "programming", "punctuation", "formal", "difficult", "custom", "mixed"]),
       defaultDifficulty: checkedEnum("defaultDifficulty", ["mixed", "1", "2", "3"]),
       showLiveWpm: checkedBoolean("showLiveWpm"),
@@ -124,11 +131,26 @@ function sanitizeResult(value) {
 
   var language = enumValue(value.language, ["en", "fa"], "en")
   if (value.language !== undefined && value.language !== language) issues.push("language")
-  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 2)
+  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 3)
   if (value.schemaVersion !== undefined && (!isFiniteNumberValue(value.schemaVersion) || Number(value.schemaVersion) !== declaredSchema)) issues.push("schemaVersion")
-  var schemaVersion = declaredSchema >= 2 ? 2 : 1
+  var schemaVersion = declaredSchema >= 3 ? 3 : declaredSchema >= 2 ? 2 : 1
   var mode = enumValue(value.mode, ["standard", "adaptive"], "standard")
   if (value.mode !== undefined && value.mode !== mode) issues.push("mode")
+  var testType = enumValue(value.testType, ["timed", "words", "passage"], "timed")
+  if (value.testType !== undefined && value.testType !== testType) issues.push("testType")
+  if (testType === "passage" && mode === "adaptive") {
+    mode = "standard"
+    issues.push("mode")
+  }
+  var configuredDuration = testType === "timed"
+    ? numberField("configuredDurationSeconds", 60, 15, 3600)
+    : 0
+  var allowedTargetWordCounts = [10, 25, 50, 100]
+  var targetWordCount = testType === "words"
+    ? finiteInteger(value.targetWordCount, 25, 10, 100)
+    : 0
+  if (testType === "words" && allowedTargetWordCounts.indexOf(targetWordCount) < 0) targetWordCount = 25
+  if (value.targetWordCount !== undefined && Number(value.targetWordCount) !== targetWordCount) issues.push("targetWordCount")
 
   var passageIds = []
   if (value.passageIds !== undefined && !Array.isArray(value.passageIds)) issues.push("passageIds")
@@ -250,8 +272,10 @@ function sanitizeResult(value) {
       completedAt: completedAt,
       language: language,
       mode: mode,
+      testType: testType,
+      targetWordCount: targetWordCount,
       durationSeconds: numberField("durationSeconds", 0, 0),
-      configuredDurationSeconds: numberField("configuredDurationSeconds", 60, 15, 3600),
+      configuredDurationSeconds: configuredDuration,
       category: cleanString(value.category, "common"),
       difficulty: cleanString(value.difficulty, "mixed"),
       grossWpm: numberField("grossWpm", 0, 0),

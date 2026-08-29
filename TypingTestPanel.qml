@@ -96,8 +96,9 @@ Item {
     currentView = "test"
   }
 
-  function startAdaptive(language, durationSeconds) {
+  function startAdaptive(language, durationSeconds, testType, targetWordCount) {
     var selectedLanguage = language === "fa" ? "fa" : "en"
+    var selectedTestType = testType === "words" ? "words" : "timed"
     var analysis = AdaptivePractice.rankTargets(dataStore.history, selectedLanguage, dataStore.settings)
     if (!analysis.available) {
       currentView = "setup"
@@ -105,7 +106,9 @@ Item {
     }
     startTest({
       language: selectedLanguage,
-      durationSeconds: Math.max(15, Number(durationSeconds || 60)),
+      testType: selectedTestType,
+      durationSeconds: selectedTestType === "timed" ? Math.max(15, Number(durationSeconds || 60)) : 0,
+      targetWordCount: selectedTestType === "words" ? Math.max(10, Number(targetWordCount || 25)) : 0,
       category: "mixed",
       difficulty: "mixed",
       mode: "adaptive",
@@ -126,7 +129,9 @@ Item {
     if (!result) return null
     var language = result.language === "fa" ? "fa" : "en"
     var filters = {
-      durationSeconds: String(result.configuredDurationSeconds || 60),
+      testType: String(result.testType || "timed"),
+      durationSeconds: String(result.testType || "timed") === "timed" ? String(result.configuredDurationSeconds || 60) : "all",
+      targetWordCount: String(result.testType || "timed") === "words" ? String(result.targetWordCount || 25) : "all",
       mode: String(result.mode || "standard"),
       category: String(result.category || "common"),
       difficulty: String(result.difficulty || "mixed")
@@ -141,7 +146,9 @@ Item {
     progressComparison = resultComparison
     activeOptions = {
       language: result.language || "en",
-      durationSeconds: Number(result.configuredDurationSeconds || 60),
+      testType: result.testType || "timed",
+      durationSeconds: String(result.testType || "timed") === "timed" ? Number(result.configuredDurationSeconds || 60) : 0,
+      targetWordCount: String(result.testType || "timed") === "words" ? Number(result.targetWordCount || 25) : 0,
       category: result.category || "common",
       difficulty: result.difficulty || "mixed",
       mode: result.mode || "standard",
@@ -195,7 +202,9 @@ Item {
       onHistoryRequested: root.currentView = "history"
       onProgressRequested: root.currentView = "progress"
       onPracticeRequested: root.startAdaptive(root.currentResult ? root.currentResult.language : "en",
-        Math.min(180, root.currentResult ? Number(root.currentResult.configuredDurationSeconds || 60) : 60))
+        Math.min(180, root.currentResult ? Number(root.currentResult.configuredDurationSeconds || 60) : 60),
+        root.currentResult ? root.currentResult.testType : "timed",
+        root.currentResult ? root.currentResult.targetWordCount : 0)
     }
   }
 

@@ -23,7 +23,7 @@ Item {
   property bool hasTyped: typedText.length > 0 || totalEntered > 0
   property double startedMs: 0
   property double elapsedSeconds: 0
-  property double remainingSeconds: Number(options.durationSeconds || 60)
+  property double remainingSeconds: options.testType === "timed" ? Number(options.durationSeconds || 60) : 0
   property int totalEntered: 0
   property int correctAttempts: 0
   property int backspaces: 0
@@ -53,11 +53,17 @@ Item {
   function start(testOptions) {
     var nextOptions = {}
     for (var optionKey in (testOptions || {})) nextOptions[optionKey] = testOptions[optionKey]
+    nextOptions.testType = ["timed", "words", "passage"].indexOf(nextOptions.testType) >= 0 ? nextOptions.testType : "timed"
     nextOptions.mode = nextOptions.mode === "adaptive" ? "adaptive" : "standard"
+    if (nextOptions.testType === "passage") nextOptions.mode = "standard"
+    nextOptions.targetWordCount = nextOptions.testType === "words" && [10, 25, 50, 100].indexOf(Number(nextOptions.targetWordCount)) >= 0
+      ? Number(nextOptions.targetWordCount) : 0
     if (!Array.isArray(nextOptions.adaptiveTargets)) nextOptions.adaptiveTargets = []
     if (!Array.isArray(nextOptions.recentPassageIds)) nextOptions.recentPassageIds = []
     options = nextOptions
-    var target = Math.max(1000, Math.ceil(Number(options.durationSeconds || 60) / 60 * 700))
+    var target = options.testType === "timed"
+      ? Math.max(1000, Math.ceil(Number(options.durationSeconds || 60) / 60 * 700))
+      : 0
     var difficult = []
     if (options.category === "difficult" && store) {
       var counts = {}
@@ -79,23 +85,42 @@ Item {
         options.adaptiveTargets = adaptiveTargets
       }
       if (adaptiveTargets.length > 0) {
-        built = AdaptivePractice.buildAdaptiveTest(library ? library.passages : [], options.language || "en",
-          adaptiveTargets, target, options.recentPassageIds)
+        built = options.testType === "words"
+          ? AdaptivePractice.buildAdaptiveWordTest(library ? library.passages : [], options.language || "en",
+              adaptiveTargets, options.targetWordCount, options.recentPassageIds)
+          : AdaptivePractice.buildAdaptiveTest(library ? library.passages : [], options.language || "en",
+              adaptiveTargets, target, options.recentPassageIds)
         if (!built.text || Number(built.matchedPassages || 0) <= 0) {
           options.mode = "standard"
           options.adaptiveTargets = []
-          built = PassageLoader.buildTest(library ? library.passages : [], options.language || "en",
-            "mixed", "mixed", target)
+          built = options.testType === "words"
+            ? PassageLoader.buildWordTest(library ? library.passages : [], options.language || "en",
+                "mixed", "mixed", options.targetWordCount)
+            : PassageLoader.buildTest(library ? library.passages : [], options.language || "en",
+                "mixed", "mixed", target)
         }
       } else {
         options.mode = "standard"
-        built = PassageLoader.buildTest(library ? library.passages : [], options.language || "en",
-          "common", "mixed", target)
+        built = options.testType === "words"
+          ? PassageLoader.buildWordTest(library ? library.passages : [], options.language || "en",
+              "common", "mixed", options.targetWordCount)
+          : PassageLoader.buildTest(library ? library.passages : [], options.language || "en",
+              "common", "mixed", target)
       }
     } else {
-      built = options.category === "difficult"
-        ? PassageLoader.buildDifficultTest(library ? library.passages : [], options.language || "en", difficult, target)
-        : PassageLoader.buildTest(library ? library.passages : [], options.language || "en", options.category || "common", options.difficulty || "mixed", target)
+      if (options.testType === "passage") {
+        built = options.category === "difficult"
+          ? PassageLoader.buildDifficultPassageTest(library ? library.passages : [], options.language || "en", difficult)
+          : PassageLoader.buildPassageTest(library ? library.passages : [], options.language || "en", options.category || "common", options.difficulty || "mixed")
+      } else if (options.testType === "words") {
+        built = options.category === "difficult"
+          ? PassageLoader.buildDifficultWordTest(library ? library.passages : [], options.language || "en", difficult, options.targetWordCount)
+          : PassageLoader.buildWordTest(library ? library.passages : [], options.language || "en", options.category || "common", options.difficulty || "mixed", options.targetWordCount)
+      } else {
+        built = options.category === "difficult"
+          ? PassageLoader.buildDifficultTest(library ? library.passages : [], options.language || "en", difficult, target)
+          : PassageLoader.buildTest(library ? library.passages : [], options.language || "en", options.category || "common", options.difficulty || "mixed", target)
+      }
     }
     expectedText = built.text
     if (store && store.settings.zwnjCountsAsError === false) expectedText = expectedText.replace(/\u200c/g, "")
@@ -104,7 +129,7 @@ Item {
     running = false
     startedMs = 0
     elapsedSeconds = 0
-    remainingSeconds = Number(options.durationSeconds || 60)
+    remainingSeconds = options.testType === "timed" ? Number(options.durationSeconds || 60) : 0
     totalEntered = 0
     correctAttempts = 0
     backspaces = 0
@@ -220,7 +245,10 @@ Item {
   function finish() {
     if (!hasTyped) return
     if (running) {
-      elapsedSeconds = Math.min(Number(options.durationSeconds || 60), Math.max(0.001, (Date.now() - startedMs) / 1000))
+      var actualElapsed = Math.max(0.001, (Date.now() - startedMs) / 1000)
+      elapsedSeconds = options.testType === "timed"
+        ? Math.min(Number(options.durationSeconds || 60), actualElapsed)
+        : actualElapsed
       running = false
     }
     var finalEvaluation = Metrics.evaluateFinal(expectedText, typedText, normalizationOptions)
@@ -229,14 +257,16 @@ Item {
     var values = Metrics.calculate(totalEntered, correctAttempts, finalEvaluation.incorrect, elapsedSeconds, Metrics.completedWordCount(expectedText, Normalization.characters(typedText).length))
     var includeCorrected = store ? store.settings.includeCorrectedErrorsInDifficulty !== false : true
     var result = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: String(Date.now()) + "-" + Math.floor(Math.random() * 1000000),
       startedAt: new Date(startedMs || Date.now()).toISOString(),
       completedAt: new Date().toISOString(),
       language: options.language || "en",
       mode: options.mode === "adaptive" ? "adaptive" : "standard",
+      testType: options.testType || "timed",
+      targetWordCount: options.testType === "words" ? Number(options.targetWordCount || 25) : 0,
       durationSeconds: elapsedSeconds,
-      configuredDurationSeconds: Number(options.durationSeconds || 60),
+      configuredDurationSeconds: options.testType === "timed" ? Number(options.durationSeconds || 60) : 0,
       category: options.mode === "adaptive" ? "mixed" : (options.category || "common"),
       difficulty: options.mode === "adaptive" ? "mixed" : (options.difficulty || "mixed"),
       grossWpm: values.grossWpm,
@@ -262,6 +292,14 @@ Item {
   function timeText(seconds) {
     var whole = Math.max(0, Math.ceil(seconds))
     return String(Math.floor(whole / 60)).padStart(2, "0") + ":" + String(whole % 60).padStart(2, "0")
+  }
+
+  function testProgressText() {
+    if (options.testType === "timed") return timeText(remainingSeconds)
+    var elapsed = timeText(elapsedSeconds)
+    if (options.testType !== "words") return elapsed
+    var completed = Metrics.completedWordCount(expectedText, Normalization.characters(typedText).length)
+    return completed + " / " + Number(options.targetWordCount || 25) + " WORDS  ·  " + elapsed
   }
 
   function htmlEscape(character) {
@@ -388,7 +426,9 @@ Item {
     running: root.running
     onTriggered: {
       root.elapsedSeconds = (Date.now() - root.startedMs) / 1000
-      root.remainingSeconds = Math.max(0, Number(root.options.durationSeconds || 60) - root.elapsedSeconds)
+      root.remainingSeconds = root.options.testType === "timed"
+        ? Math.max(0, Number(root.options.durationSeconds || 60) - root.elapsedSeconds)
+        : 0
       var sampleSecond = Math.floor(root.elapsedSeconds / 5) * 5
       if (sampleSecond >= 5 && sampleSecond > root.lastSampleSecond) {
         root.lastSampleSecond = sampleSecond
@@ -396,7 +436,7 @@ Item {
         samples.push({ elapsedSeconds: sampleSecond, grossWpm: root.liveMetrics.grossWpm })
         root.wpmSamples = samples
       }
-      if (root.remainingSeconds <= 0) root.finish()
+      if (root.options.testType === "timed" && root.remainingSeconds <= 0) root.finish()
     }
   }
 
@@ -494,7 +534,7 @@ Item {
 
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        text: root.timeText(root.remainingSeconds)
+        text: root.testProgressText()
         color: Color.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.display

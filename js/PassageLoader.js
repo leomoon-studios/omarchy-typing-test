@@ -40,9 +40,19 @@ function filter(passages, language, category, difficulty) {
   return selected
 }
 
-function buildTest(passages, language, category, difficulty, targetCharacters, randomFunction) {
+function words(value) {
+  var text = String(value || "").trim()
+  return text ? text.split(/\s+/) : []
+}
+
+function candidatesFor(passages, language, category, difficulty) {
   var candidates = filter(passages, language, category, difficulty)
   if (candidates.length === 0 && difficulty !== "mixed") candidates = filter(passages, language, category, "mixed")
+  return candidates
+}
+
+function buildTest(passages, language, category, difficulty, targetCharacters, randomFunction) {
+  var candidates = candidatesFor(passages, language, category, difficulty)
   candidates = shuffled(candidates, randomFunction)
   var text = ""
   var ids = []
@@ -63,6 +73,34 @@ function buildTest(passages, language, category, difficulty, targetCharacters, r
     if (text.length < target) candidates = shuffled(candidates, randomFunction)
   }
   return { text: text, passageIds: ids }
+}
+
+function buildWordTest(passages, language, category, difficulty, targetWordCount, randomFunction) {
+  var candidates = shuffled(candidatesFor(passages, language, category, difficulty), randomFunction)
+  var target = Math.max(1, Math.round(Number(targetWordCount) || 25))
+  var selectedWords = []
+  var ids = []
+  var lastId = ""
+  var cursor = 0
+  while (candidates.length > 0 && selectedWords.length < target) {
+    var item = candidates[cursor % candidates.length]
+    cursor++
+    if (candidates.length > 1 && item.id === lastId) continue
+    var available = words(item.text)
+    if (available.length === 0) continue
+    var remaining = target - selectedWords.length
+    selectedWords = selectedWords.concat(available.slice(0, remaining))
+    ids.push(item.id)
+    lastId = item.id
+    if (cursor % candidates.length === 0) candidates = shuffled(candidates, randomFunction)
+  }
+  return { text: selectedWords.join(" "), passageIds: ids, wordCount: selectedWords.length }
+}
+
+function buildPassageTest(passages, language, category, difficulty, randomFunction) {
+  var candidates = shuffled(candidatesFor(passages, language, category, difficulty), randomFunction)
+  if (candidates.length === 0) return { text: "", passageIds: [] }
+  return { text: String(candidates[0].text || "").trim(), passageIds: [candidates[0].id] }
 }
 
 function buildDifficultTest(passages, language, difficultCharacters, targetCharacters) {
@@ -92,4 +130,38 @@ function buildDifficultTest(passages, language, difficultCharacters, targetChara
     ids.push(candidates[j].id)
   }
   return { text: selectedText, passageIds: ids }
+}
+
+function difficultCandidates(passages, language, difficultCharacters) {
+  var characters = (difficultCharacters || []).slice(0, 12)
+  var candidates = filter(passages, language, "mixed", "mixed")
+  candidates.sort(function(a, b) {
+    function score(item) {
+      var value = 0
+      var text = String(item.text || "")
+      for (var i = 0; i < characters.length; i++) {
+        var needle = String(characters[i] || "")
+        if (!needle) continue
+        var position = text.indexOf(needle)
+        while (position >= 0) { value++; position = text.indexOf(needle, position + needle.length) }
+      }
+      return value
+    }
+    return score(b) - score(a)
+  })
+  return candidates
+}
+
+function buildDifficultWordTest(passages, language, difficultCharacters, targetWordCount) {
+  if (!Array.isArray(difficultCharacters) || difficultCharacters.length === 0)
+    return buildWordTest(passages, language, "common", "mixed", targetWordCount)
+  return buildWordTest(difficultCandidates(passages, language, difficultCharacters), language, "mixed", "mixed", targetWordCount, function() { return 0.999999 })
+}
+
+function buildDifficultPassageTest(passages, language, difficultCharacters) {
+  if (!Array.isArray(difficultCharacters) || difficultCharacters.length === 0)
+    return buildPassageTest(passages, language, "common", "mixed")
+  var candidates = difficultCandidates(passages, language, difficultCharacters)
+  if (candidates.length === 0) return { text: "", passageIds: [] }
+  return { text: String(candidates[0].text || "").trim(), passageIds: [candidates[0].id] }
 }

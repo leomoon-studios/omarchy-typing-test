@@ -60,6 +60,8 @@ assert.equal(oneMinute.literalWpm, 42);
 assert.equal(oneMinute.accuracy, 98);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 50 }, { grossWpm: 50 }]), 100);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 52 }]), null);
+assert.equal(Metrics.completedWordCount("one two three", 8), 2);
+assert.equal(Metrics.completedWordCount("one two three", 13), 3);
 assert.equal(JSON.stringify(Metrics.evaluateFinal("یک", "يك", { persianNormalization: "forgiving" })), JSON.stringify({ correct: 2, incorrect: 0, entered: 2 }));
 assert.equal(JSON.stringify(Metrics.evaluateFinal("می‌روم", "میروم", { zwnjCountsAsError: false })), JSON.stringify({ correct: 5, incorrect: 0, entered: 5 }));
 assert.equal(JSON.stringify(Metrics.evaluateFinal("میروم", "می‌روم", { zwnjCountsAsError: false })), JSON.stringify({ correct: 5, incorrect: 0, entered: 5 }));
@@ -99,9 +101,11 @@ assert.equal(parsed.length, 2);
 assert.equal(PassageLoader.filter(parsed, "fa", "mixed", "mixed").length, 1);
 
 const defaultSettings = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   defaultLanguage: "en",
+  defaultTestType: "timed",
   defaultDurationSeconds: 60,
+  defaultWordCount: 25,
   defaultCategory: "common",
   defaultDifficulty: "mixed",
   showLiveWpm: true,
@@ -116,6 +120,8 @@ const defaultSettings = {
 };
 const nullSettings = Persistence.sanitizeSettings(null, defaultSettings);
 assert.equal(nullSettings.value.defaultLanguage, "en");
+assert.equal(nullSettings.value.defaultTestType, "timed");
+assert.equal(nullSettings.value.defaultWordCount, 25);
 assert.equal(nullSettings.value.defaultDurationSeconds, 60);
 assert.equal(nullSettings.issues.length > 0, true);
 const malformedSettings = Persistence.parseSettings('{"defaultLanguage":', defaultSettings);
@@ -131,7 +137,9 @@ assert.equal(nullSettingsJson.issues.length > 0, true);
 assert.equal(nullSettingsJson.value.defaultLanguage, "en");
 const repairedSettings = Persistence.sanitizeSettings({
   defaultLanguage: null,
+  defaultTestType: "laps",
   defaultDurationSeconds: -10,
+  defaultWordCount: 42,
   defaultCategory: [],
   defaultDifficulty: 2,
   showLiveWpm: "yes",
@@ -145,7 +153,9 @@ const repairedSettings = Persistence.sanitizeSettings({
   coachingEnabled: "yes"
 }, defaultSettings);
 assert.equal(repairedSettings.value.defaultLanguage, "en");
+assert.equal(repairedSettings.value.defaultTestType, "timed");
 assert.equal(repairedSettings.value.defaultDurationSeconds, 15);
+assert.equal(repairedSettings.value.defaultWordCount, 25);
 assert.equal(repairedSettings.value.defaultCategory, "common");
 assert.equal(repairedSettings.value.defaultDifficulty, "2");
 assert.equal(repairedSettings.value.showLiveWpm, true);
@@ -199,6 +209,8 @@ assert.equal(parsedHistory.rows[0].wpmSamples.length, 1);
 assert.equal(parsedHistory.rows[0].wpmSamples[0].grossWpm, 42);
 assert.equal(parsedHistory.rows[0].schemaVersion, 1);
 assert.equal(parsedHistory.rows[0].mode, "standard");
+assert.equal(parsedHistory.rows[0].testType, "timed");
+assert.equal(parsedHistory.rows[0].targetWordCount, 0);
 assert.deepEqual(Array.from(parsedHistory.rows[0].adaptiveTargets), []);
 assert.deepEqual(Array.from(parsedHistory.rows[0].characterStats), []);
 assert.equal(Persistence.sanitizeResult(null).value, null);
@@ -245,6 +257,32 @@ assert.equal(versionTwoResult.value.characterStats[0].opportunities, 12);
 assert.equal(versionTwoResult.issues.length > 0, true);
 assert.equal(Object.hasOwn(versionTwoResult.value, "typedText"), false);
 assert.equal(Object.hasOwn(versionTwoResult.value, "expectedText"), false);
+const versionThreeWordResult = Persistence.sanitizeResult({
+  schemaVersion: 3,
+  id: "version-three-words",
+  completedAt: "2026-08-23T14:00:00.000Z",
+  language: "en",
+  mode: "adaptive",
+  testType: "words",
+  targetWordCount: 50,
+  configuredDurationSeconds: 300,
+  durationSeconds: 42
+});
+assert.equal(versionThreeWordResult.value.schemaVersion, 3);
+assert.equal(versionThreeWordResult.value.testType, "words");
+assert.equal(versionThreeWordResult.value.targetWordCount, 50);
+assert.equal(versionThreeWordResult.value.configuredDurationSeconds, 0);
+const repairedPassageResult = Persistence.sanitizeResult({
+  schemaVersion: 3,
+  id: "version-three-passage",
+  completedAt: "2026-08-23T15:00:00.000Z",
+  mode: "adaptive",
+  testType: "passage",
+  targetWordCount: 100
+});
+assert.equal(repairedPassageResult.value.testType, "passage");
+assert.equal(repairedPassageResult.value.mode, "standard");
+assert.equal(repairedPassageResult.value.targetWordCount, 0);
 const mixedHistory = Persistence.parseHistory([
   JSON.stringify(parsedHistory.rows[0]),
   JSON.stringify(versionTwoResult.value)
@@ -269,6 +307,22 @@ assert.equal(new Set(repeatedBuild.passageIds.slice(0, 2)).size, 2);
 for (let index = 1; index < repeatedBuild.passageIds.length; index++) {
   assert.notEqual(repeatedBuild.passageIds[index], repeatedBuild.passageIds[index - 1]);
 }
+const completionPassages = [
+  { id: "short-a", language: "en", category: "common", difficulty: 1, text: "one two three four five six" },
+  { id: "short-b", language: "en", category: "common", difficulty: 1, text: "seven eight nine ten eleven twelve" }
+];
+for (const targetWordCount of [10, 25, 50, 100]) {
+  const wordBuild = PassageLoader.buildWordTest(completionPassages, "en", "common", 1, targetWordCount, () => 0.25);
+  assert.equal(wordBuild.text.trim().split(/\s+/u).length, targetWordCount);
+  assert.equal(wordBuild.wordCount, targetWordCount);
+}
+const passageBuild = PassageLoader.buildPassageTest(completionPassages, "en", "common", 1, () => 0.999);
+assert.equal(passageBuild.text, completionPassages[0].text);
+assert.deepEqual(Array.from(passageBuild.passageIds), ["short-a"]);
+const persianWordBuild = PassageLoader.buildWordTest([
+  { id: "fa-words", language: "fa", category: "common", difficulty: 1, text: "یک دو سه چهار پنج شش هفت هشت نه ده" }
+], "fa", "common", 1, 10);
+assert.equal(persianWordBuild.text.split(/\s+/u).length, 10);
 
 function adaptiveResult(id, language, character, opportunities, errors, passageIds = []) {
   return {
@@ -342,6 +396,12 @@ for (let index = 1; index < adaptiveBuild.passageIds.length; index++) {
   assert.notEqual(adaptiveBuild.passageIds[index], adaptiveBuild.passageIds[index - 1]);
 }
 assert.equal(AdaptivePractice.buildAdaptiveTest([], "en", ["e"], 300, []).text, "");
+const adaptiveWordBuild = AdaptivePractice.buildAdaptiveWordTest([
+  { id: "adaptive-a", language: "en", category: "common", text: "every eager example encourages even effort" },
+  { id: "adaptive-b", language: "en", category: "literature", text: "evening settles gently over evergreen trees" }
+], "en", ["e"], 25, []);
+assert.equal(adaptiveWordBuild.text.split(/\s+/u).length, 25);
+assert.equal(adaptiveWordBuild.wordCount, 25);
 
 const progressNewest = [];
 for (let index = 10; index >= 1; index--) {
@@ -360,13 +420,16 @@ assert.equal(progressSeven.length, 7);
 assert.equal(progressSeven[0].id, "progress-4");
 assert.equal(progressSeven[6].id, "progress-10");
 const scopedProgress = [
-  { ...progressNewest[0], id: "scope-match", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "1" },
-  { ...progressNewest[1], id: "scope-duration", configuredDurationSeconds: 180, mode: "standard", category: "common", difficulty: "1" },
-  { ...progressNewest[2], id: "scope-mode", configuredDurationSeconds: 60, mode: "adaptive", category: "mixed", difficulty: "mixed" },
-  { ...progressNewest[3], id: "scope-category", configuredDurationSeconds: 60, mode: "standard", category: "literature", difficulty: "1" },
-  { ...progressNewest[4], id: "scope-difficulty", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "3" }
+  { ...progressNewest[0], id: "scope-match", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "1" },
+  { ...progressNewest[1], id: "scope-duration", testType: "timed", configuredDurationSeconds: 180, mode: "standard", category: "common", difficulty: "1" },
+  { ...progressNewest[2], id: "scope-mode", testType: "timed", configuredDurationSeconds: 60, mode: "adaptive", category: "mixed", difficulty: "mixed" },
+  { ...progressNewest[3], id: "scope-category", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "literature", difficulty: "1" },
+  { ...progressNewest[4], id: "scope-difficulty", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "common", difficulty: "3" },
+  { ...progressNewest[5], id: "scope-words", testType: "words", targetWordCount: 25, configuredDurationSeconds: 0, mode: "standard", category: "common", difficulty: "1" },
+  { ...progressNewest[6], id: "scope-passage", testType: "passage", configuredDurationSeconds: 0, mode: "standard", category: "common", difficulty: "1" }
 ];
 const exactScope = Progress.filterHistory(scopedProgress, "en", "all", {
+  testType: "timed",
   durationSeconds: "60",
   mode: "standard",
   category: "common",
@@ -374,10 +437,15 @@ const exactScope = Progress.filterHistory(scopedProgress, "en", "all", {
 });
 assert.deepEqual(Array.from(exactScope, row => row.id), ["scope-match"]);
 assert.equal(Progress.filterHistory(scopedProgress, "en", "all", {
-  durationSeconds: "all", mode: "all", category: "all", difficulty: "all"
-}).length, 5);
+  testType: "all", durationSeconds: "all", targetWordCount: "all", mode: "all", category: "all", difficulty: "all"
+}).length, 7);
 assert.deepEqual(Array.from(Progress.durationOptions(scopedProgress, "en", 300), row => row.value), ["all", "60", "180", "300"]);
+assert.deepEqual(Array.from(Progress.wordCountOptions(scopedProgress, "en", 50), row => row.value), ["all", "25", "50"]);
+assert.deepEqual(Array.from(Progress.filterHistory(scopedProgress, "en", "all", {
+  testType: "words", durationSeconds: "all", targetWordCount: "25", mode: "standard", category: "common", difficulty: "1"
+}), row => row.id), ["scope-words"]);
 const scopedComparison = Progress.comparisonContext(exactScope, "en", "30-tests", {
+  testType: "timed",
   durationSeconds: "60",
   mode: "standard",
   category: "common",
@@ -387,8 +455,11 @@ assert.equal(scopedComparison.label, "English · 1 min · Standard · Common · 
 assert.equal(scopedComparison.count, 1);
 assert.equal(scopedComparison.bestWpm, 100);
 assert.equal(Progress.comparisonContext([], "fa", "all", {
-  durationSeconds: "all", mode: "all", category: "all", difficulty: "all"
-}).label, "Parsi · All durations · All modes · All content · All difficulties · All history");
+  testType: "all", durationSeconds: "all", targetWordCount: "all", mode: "all", category: "all", difficulty: "all"
+}).label, "Parsi · All test formats · All modes · All content · All difficulties · All history");
+assert.equal(Progress.comparisonContext([], "en", "all", {
+  testType: "words", targetWordCount: "25", mode: "standard", category: "all", difficulty: "all"
+}).label, "English · 25 words · Standard · All content · All difficulties · All history");
 const progressSummary = Progress.summary(progressSeven);
 assert.equal(progressSummary.count, 7);
 assert.equal(progressSummary.currentWpm, 90);
@@ -426,6 +497,17 @@ assert.equal(coaching.messages.length <= 3, true);
 assert.equal(coaching.messages[0].kind, "substitution");
 assert.equal(coaching.messages.some(message => message.kind === "accuracy"), true);
 assert.equal(coaching.recommendation.mode, "adaptive");
+const wordCoachingResult = { ...coachingResult, id: "word-coaching", testType: "words", targetWordCount: 25, configuredDurationSeconds: 0 };
+const wordCoaching = Coaching.summarize(wordCoachingResult, [
+  wordCoachingResult,
+  { ...coachingHistory[1], id: "same-word-count", testType: "words", targetWordCount: 25, configuredDurationSeconds: 0 },
+  { ...coachingHistory[2], id: "wrong-word-count", testType: "words", targetWordCount: 50, configuredDurationSeconds: 0 },
+  { ...coachingHistory[3], id: "wrong-test-type", testType: "timed", targetWordCount: 0, configuredDurationSeconds: 60 }
+], englishTargets);
+assert.equal(wordCoaching.baselineCount, 1);
+assert.equal(wordCoaching.recommendation.testType, "words");
+assert.equal(wordCoaching.recommendation.targetWordCount, 25);
+assert.match(wordCoaching.recommendation.text, /25-word adaptive/u);
 assert.equal(Coaching.comparableBaseline({
   id: "strict-current", language: "en", configuredDurationSeconds: 60, mode: "standard"
 }, [
@@ -531,7 +613,9 @@ assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recomme
 assert.match(panelSource, /function comparisonForResult/u, "result pages must receive a comparison context");
 assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u, "Progress-to-result navigation must preserve comparison context");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
-assert.match(testViewSource, /schemaVersion:\s*2/u, "new results must use schema version 2");
+assert.match(testViewSource, /schemaVersion:\s*3/u, "new results must use schema version 3");
+assert.match(testViewSource, /testType:\s*options\.testType/u, "new results must identify their test format");
+assert.match(testViewSource, /options\.testType === "timed" && root\.remainingSeconds <= 0/u, "only timed tests may finish from the countdown");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
 assert.match(testViewSource, /sourceValue\.replace\(\/\\u200c\/g/u, "typing input must remove ignored ZWNJs before positional comparison");
 const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
@@ -541,10 +625,16 @@ assert.match(resultsViewSource, /text:\s*"PROGRESS COMPARISON"/u, "results must 
 assert.match(resultsViewSource, /Scoped PB/u, "results must display the scoped personal best");
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
+assert.match(historyViewSource, /if \(testType === "passage"\) return "PASSAGE"/u, "history must label passage-completion results");
 const progressViewSource = fs.readFileSync(path.join(root, "components", "ProgressView.qml"), "utf8");
 assert.match(progressViewSource, /text:\s*"ACTIVE COMPARISON"/u, "Progress must identify the active comparison group");
 assert.match(progressViewSource, /contextLabel:\s*root\.comparison\.label/u, "Progress charts must carry the active comparison label");
 assert.match(progressViewSource, /initialComparison:\s*null/u, "Progress must be able to restore its comparison filters");
+const setupViewSource = fs.readFileSync(path.join(root, "components", "SetupView.qml"), "utf8");
+for (const format of ["timed", "words", "passage"]) {
+  assert.match(setupViewSource, new RegExp(`chooseTestType\\("${format}"\\)`, "u"), `setup must expose ${format} tests`);
+}
+assert.match(setupViewSource, /model:\s*\[10, 25, 50, 100\]/u, "setup must expose 10, 25, 50, and 100-word tests");
 for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);

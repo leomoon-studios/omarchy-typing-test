@@ -42,6 +42,7 @@ function completedWordCount(expected, typedLength) {
   var prefix = String(expected || "").slice(0, Math.max(0, typedLength))
   var matches = prefix.trim().match(/\S+/g)
   if (!matches) return 0
+  if (Math.max(0, typedLength) >= String(expected || "").length) return matches.length
   if (prefix.length > 0 && !/\s$/.test(prefix)) return Math.max(0, matches.length - 1)
   return matches.length
 }

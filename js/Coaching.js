@@ -26,7 +26,13 @@ function comparableBaseline(result, history) {
   for (var index = 0; index < source.length; index++) {
     var row = source[index]
     if (!row || row.id === result.id || row.language !== result.language) continue
-    if (Number(row.configuredDurationSeconds || 0) === Number(result.configuredDurationSeconds || 0)
+    var testType = String(result.testType || "timed")
+    var sameLength = testType === "timed"
+      ? Number(row.configuredDurationSeconds || 0) === Number(result.configuredDurationSeconds || 0)
+      : testType === "words"
+        ? Number(row.targetWordCount || 0) === Number(result.targetWordCount || 0)
+        : true
+    if (String(row.testType || "timed") === testType && sameLength
         && String(row.mode || "standard") === String(result.mode || "standard")) preferred.push(row)
   }
   return preferred.slice(0, 5)
@@ -107,17 +113,24 @@ function adaptiveTargetChange(result, baseline) {
 
 function recommendation(result, adaptiveAnalysis) {
   var language = result && result.language === "fa" ? "fa" : "en"
+  var testType = String(result && result.testType || "timed")
   var duration = Math.max(15, Math.round(finiteNumber(result && result.configuredDurationSeconds, 60)))
   var durationText = duration < 60
     ? duration + "-second"
     : (duration % 60 === 0 ? (duration / 60) + "-minute" : Math.floor(duration / 60) + "-minute")
   if (adaptiveAnalysis && adaptiveAnalysis.available) {
+    var adaptiveTestType = testType === "words" ? "words" : "timed"
+    var adaptiveWordCount = adaptiveTestType === "words"
+      ? Math.max(10, Math.round(finiteNumber(result && result.targetWordCount, 25))) : 0
     return {
       mode: "adaptive",
       language: language,
-      durationSeconds: Math.min(180, duration),
+      testType: adaptiveTestType,
+      durationSeconds: adaptiveTestType === "timed" ? Math.min(180, duration) : 0,
+      targetWordCount: adaptiveWordCount,
       targets: adaptiveAnalysis.characters || [],
-      text: "Try a " + (Math.min(180, duration) < 60 ? Math.min(180, duration) + "-second" : (Math.min(180, duration) / 60) + "-minute") + " adaptive "
+      text: "Try a " + (adaptiveTestType === "words" ? adaptiveWordCount + "-word"
+          : (Math.min(180, duration) < 60 ? Math.min(180, duration) + "-second" : (Math.min(180, duration) / 60) + "-minute")) + " adaptive "
         + (language === "fa" ? "Parsi" : "English") + " test targeting "
         + (adaptiveAnalysis.characters || []).slice(0, 3).join(language === "fa" ? "، " : ", ") + "."
     }
@@ -126,8 +139,13 @@ function recommendation(result, adaptiveAnalysis) {
     mode: "standard",
     language: language,
     durationSeconds: duration,
+    testType: testType,
+    targetWordCount: testType === "words" ? Math.max(10, Math.round(finiteNumber(result && result.targetWordCount, 25))) : 0,
     targets: [],
-    text: "Continue with another " + durationText + " standard " + (language === "fa" ? "Parsi" : "English")
+    text: "Continue with another " + (testType === "words"
+        ? Math.max(10, Math.round(finiteNumber(result && result.targetWordCount, 25))) + "-word"
+        : testType === "passage" ? "passage-completion" : durationText)
+      + " standard " + (language === "fa" ? "Parsi" : "English")
       + " test to build a stronger practice baseline."
   }
 }

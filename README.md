@@ -1,7 +1,7 @@
 # Omarchy Typing Test
 
 A local-first Omarchy 4 typing test by LeoMoon Studios with English and Parsi
-passages, timed tests, detailed error analysis, and history.
+passages, timed and completion-based tests, detailed error analysis, and history.
 
 ## Preview
 
@@ -32,6 +32,8 @@ passages, timed tests, detailed error analysis, and history.
 - Stationary typing pages that replace only after the displayed page is complete
 - English and Parsi input with correct LTR/RTL presentation
 - 1, 3, 5, and 10 minute presets plus custom durations
+- Fixed 10, 25, 50, and 100-word tests
+- Full-passage completion tests with an elapsed timer and no countdown
 - Adaptive English and Parsi practice based on recent difficult characters
 - Local coaching summaries with practical next-test recommendations
 - Progress charts for WPM, accuracy, consistency, errors, and character trends
@@ -82,6 +84,11 @@ Click the outlined WPM badge in the Omarchy bar. The popout shows quick statisti
 and actions for starting a test, viewing progress or history, and opening settings.
 Tests run inside a larger centered overlay.
 
+Choose **Timed**, **Words**, or **Passage** on Setup. Timed tests end when the
+countdown expires, word tests end after the selected number of words, and passage
+tests end after one complete source passage. Adaptive practice is available for
+timed and word-count tests.
+
 The popout is keyboard navigable: use the arrow keys to select an action,
 `Enter` or `Space` to open it, and `Escape` to close the popout.
 
@@ -99,7 +106,7 @@ language-specific trends without sending history anywhere.
 
 Keyboard controls during a test:
 
-- Start typing: begin the timer
+- Start typing: begin the countdown or elapsed timer
 - `Backspace`: correct the previous character
 - `Tab`: open restart confirmation after typing has begun
 - `Left`/`Right` (or `Up`/`Down`): select Cancel or Restart in the confirmation

@@ -34,6 +34,13 @@ Item {
     return Math.floor(value / 60) + "M " + (value % 60) + "S"
   }
 
+  function testTypeLabel() {
+    var testType = String(root.value("testType", "timed"))
+    if (testType === "words") return Number(root.value("targetWordCount", 25)) + " WORDS"
+    if (testType === "passage") return "PASSAGE COMPLETION"
+    return root.durationLabel(root.value("configuredDurationSeconds", root.value("durationSeconds", 0)))
+  }
+
   function optionLabel(value) {
     var option = String(value || "mixed")
     if (option === "1") return "EASY"
@@ -135,7 +142,7 @@ Item {
 
         Text {
           text: (root.value("language", "en") === "fa" ? "PARSI" : "ENGLISH")
-            + "  ·  " + root.durationLabel(root.value("configuredDurationSeconds", root.value("durationSeconds", 0)))
+            + "  ·  " + root.testTypeLabel()
             + "  ·  " + (root.value("mode", "standard") === "adaptive" ? "ADAPTIVE" : "STANDARD")
             + "  ·  " + root.optionLabel(root.value("category", "common"))
             + "  ·  " + root.optionLabel(root.value("difficulty", "mixed"))

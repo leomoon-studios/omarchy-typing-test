@@ -13,13 +13,16 @@ Item {
   property string fontFamily: Style.font.family
   property string language: store ? String(store.settings.defaultLanguage || "en") : "en"
   property string range: store ? String(store.settings.progressRange || "30-tests") : "30-tests"
+  property string testTypeFilter: store ? String(store.settings.defaultTestType || "timed") : "timed"
   property string durationFilter: store ? String(store.settings.defaultDurationSeconds || 60) : "60"
+  property string wordCountFilter: store ? String(store.settings.defaultWordCount || 25) : "25"
   property string modeFilter: "standard"
   property string categoryFilter: "all"
   property string difficultyFilter: "all"
   property var initialComparison: null
   property bool initialized: false
   property var durationChoices: [{ value: "all", label: "All durations" }, { value: "60", label: "1 min" }]
+  property var wordCountChoices: [{ value: "all", label: "All word counts" }, { value: "25", label: "25 words" }]
   property var rows: []
   property var summary: ({ count: 0, currentWpm: null, wpmChange: null, accuracy: null, bestWpm: null })
   property var comparison: ({ label: "", count: 0, bestWpm: null })
@@ -100,8 +103,11 @@ Item {
     }
     store.historyRevision
     durationChoices = Progress.durationOptions(store.history, language, store.settings.defaultDurationSeconds)
+    wordCountChoices = Progress.wordCountOptions(store.history, language, store.settings.defaultWordCount)
     var filters = {
-      durationSeconds: durationFilter,
+      testType: testTypeFilter,
+      durationSeconds: testTypeFilter === "timed" ? durationFilter : "all",
+      targetWordCount: testTypeFilter === "words" ? wordCountFilter : "all",
       mode: modeFilter,
       category: categoryFilter,
       difficulty: difficultyFilter
@@ -135,6 +141,14 @@ Item {
     if (store) store.saveSettings({ progressRange: value })
   }
 
+  function chooseTestType(value) {
+    testTypeFilter = String(value || "all")
+    if (testTypeFilter === "timed" && durationFilter === "all" && store)
+      durationFilter = String(store.settings.defaultDurationSeconds || 60)
+    if (testTypeFilter === "words" && wordCountFilter === "all" && store)
+      wordCountFilter = String(store.settings.defaultWordCount || 25)
+  }
+
   function chooseCharacter(value) {
     selectedCharacter = String(value || "")
     selectedCharacterPoints = Progress.characterTrend(rows, selectedCharacter, 120)
@@ -147,7 +161,9 @@ Item {
   onStoreChanged: rebuild()
   onLanguageChanged: rebuild()
   onRangeChanged: rebuild()
+  onTestTypeFilterChanged: rebuild()
   onDurationFilterChanged: rebuild()
+  onWordCountFilterChanged: rebuild()
   onModeFilterChanged: rebuild()
   onCategoryFilterChanged: rebuild()
   onDifficultyFilterChanged: rebuild()
@@ -157,7 +173,9 @@ Item {
     if (restored && restored.label) {
       language = restored.language === "fa" ? "fa" : "en"
       range = String(restored.range || "all")
+      testTypeFilter = String(restored.testType || "timed")
       durationFilter = String(restored.durationSeconds === undefined ? "all" : restored.durationSeconds)
+      wordCountFilter = String(restored.targetWordCount === undefined ? "all" : restored.targetWordCount)
       modeFilter = String(restored.mode || "all")
       categoryFilter = String(restored.category || "all")
       difficultyFilter = String(restored.difficulty || "all")
@@ -253,18 +271,36 @@ Item {
       }
 
       GridLayout {
-        columns: width >= Style.space(700) ? 4 : 2
+        columns: width >= Style.space(700) ? 5 : 2
         columnSpacing: Style.spacing.md
         rowSpacing: Style.spacing.sm
         Layout.fillWidth: true
 
         Dropdown {
-          label: "Duration"
+          label: "Format"
           fontFamily: root.fontFamily
-          value: root.durationFilter
-          options: root.durationChoices
+          value: root.testTypeFilter
+          options: [
+            { value: "all", label: "All formats" },
+            { value: "timed", label: "Timed" },
+            { value: "words", label: "Word count" },
+            { value: "passage", label: "Passage completion" }
+          ]
           Layout.fillWidth: true
-          onChanged: function(value) { root.durationFilter = String(value) }
+          onChanged: function(value) { root.chooseTestType(value) }
+        }
+
+        Dropdown {
+          visible: root.testTypeFilter === "timed" || root.testTypeFilter === "words"
+          label: root.testTypeFilter === "words" ? "Word count" : "Duration"
+          fontFamily: root.fontFamily
+          value: root.testTypeFilter === "words" ? root.wordCountFilter : root.durationFilter
+          options: root.testTypeFilter === "words" ? root.wordCountChoices : root.durationChoices
+          Layout.fillWidth: true
+          onChanged: function(value) {
+            if (root.testTypeFilter === "words") root.wordCountFilter = String(value)
+            else root.durationFilter = String(value)
+          }
         }
 
         Dropdown {

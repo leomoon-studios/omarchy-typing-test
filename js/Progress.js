@@ -21,9 +21,15 @@ function average(rows, field) {
 
 function matchesFilters(row, filters) {
   var selected = filters || {}
+  var rowTestType = String(row.testType || "timed")
+  var testType = String(selected.testType || "all")
+  if (testType !== "all" && rowTestType !== testType) return false
   var duration = selected.durationSeconds
   if (duration !== undefined && duration !== null && String(duration) !== "all"
-      && Number(row.configuredDurationSeconds || 0) !== Number(duration)) return false
+      && (rowTestType !== "timed" || Number(row.configuredDurationSeconds || 0) !== Number(duration))) return false
+  var targetWordCount = selected.targetWordCount
+  if (targetWordCount !== undefined && targetWordCount !== null && String(targetWordCount) !== "all"
+      && (rowTestType !== "words" || Number(row.targetWordCount || 0) !== Number(targetWordCount))) return false
   var mode = String(selected.mode || "all")
   if (mode !== "all" && String(row.mode || "standard") !== mode) return false
   var category = String(selected.category || "all")
@@ -52,7 +58,7 @@ function durationOptions(history, language, preferredDuration) {
   values[preferred] = true
   var source = Array.isArray(history) ? history : []
   for (var index = 0; index < source.length; index++) {
-    if (!source[index] || source[index].language !== selectedLanguage) continue
+    if (!source[index] || source[index].language !== selectedLanguage || String(source[index].testType || "timed") !== "timed") continue
     var duration = Math.max(15, Math.round(finiteNumber(source[index].configuredDurationSeconds, 60)))
     values[duration] = true
   }
@@ -71,6 +77,26 @@ function durationOptions(history, language, preferredDuration) {
   return result
 }
 
+function wordCountOptions(history, language, preferredWordCount) {
+  var selectedLanguage = language === "fa" ? "fa" : "en"
+  var values = {}
+  var preferred = Math.max(1, Math.round(finiteNumber(preferredWordCount, 25)))
+  values[preferred] = true
+  var source = Array.isArray(history) ? history : []
+  for (var index = 0; index < source.length; index++) {
+    if (!source[index] || source[index].language !== selectedLanguage || String(source[index].testType || "timed") !== "words") continue
+    var count = Math.max(1, Math.round(finiteNumber(source[index].targetWordCount, 25)))
+    values[count] = true
+  }
+  var counts = Object.keys(values).map(function(value) { return Number(value) })
+  counts.sort(function(a, b) { return a - b })
+  var result = [{ value: "all", label: "All word counts" }]
+  for (var countIndex = 0; countIndex < counts.length; countIndex++) {
+    result.push({ value: String(counts[countIndex]), label: counts[countIndex] + " words" })
+  }
+  return result
+}
+
 function comparisonDurationLabel(value) {
   if (value === undefined || value === null || String(value) === "all") return "All durations"
   var seconds = Math.max(15, Math.round(finiteNumber(value, 60)))
@@ -84,6 +110,17 @@ function comparisonModeLabel(value) {
   if (mode === "standard") return "Standard"
   if (mode === "adaptive") return "Adaptive"
   return "All modes"
+}
+
+function comparisonTestLabel(testType, durationSeconds, targetWordCount) {
+  var format = String(testType || "all")
+  if (format === "timed") return comparisonDurationLabel(durationSeconds)
+  if (format === "words") {
+    if (targetWordCount === undefined || targetWordCount === null || String(targetWordCount) === "all") return "All word counts"
+    return Math.max(1, Math.round(finiteNumber(targetWordCount, 25))) + " words"
+  }
+  if (format === "passage") return "Passage completion"
+  return "All test formats"
 }
 
 function comparisonCategoryLabel(value) {
@@ -120,11 +157,17 @@ function comparisonRangeLabel(value) {
 function comparisonContext(rows, language, range, filters) {
   var selected = filters || {}
   var metrics = summary(rows)
+  var selectedTestType = selected.testType
+  if (!selectedTestType && selected.targetWordCount !== undefined && String(selected.targetWordCount) !== "all") selectedTestType = "words"
+  if (!selectedTestType && selected.durationSeconds !== undefined && String(selected.durationSeconds) !== "all") selectedTestType = "timed"
   var context = {
     language: language === "fa" ? "fa" : "en",
     range: range === "7-tests" || range === "30-tests" ? range : "all",
+    testType: String(selectedTestType || "all"),
     durationSeconds: selected.durationSeconds === undefined || selected.durationSeconds === null
       ? "all" : String(selected.durationSeconds),
+    targetWordCount: selected.targetWordCount === undefined || selected.targetWordCount === null
+      ? "all" : String(selected.targetWordCount),
     mode: String(selected.mode || "all"),
     category: String(selected.category || "all"),
     difficulty: String(selected.difficulty || "all"),
@@ -133,7 +176,7 @@ function comparisonContext(rows, language, range, filters) {
   }
   context.label = [
     context.language === "fa" ? "Parsi" : "English",
-    comparisonDurationLabel(context.durationSeconds),
+    comparisonTestLabel(context.testType, context.durationSeconds, context.targetWordCount),
     comparisonModeLabel(context.mode),
     comparisonCategoryLabel(context.category),
     comparisonDifficultyLabel(context.difficulty),

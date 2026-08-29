@@ -52,6 +52,30 @@ Item {
     return Math.floor(value / 60) + "M " + (value % 60) + "S"
   }
 
+  function testTypeLabel(result) {
+    var testType = String(result && result.testType || "timed")
+    if (testType === "words") return Number(result.targetWordCount || 25) + " WORDS"
+    if (testType === "passage") return "PASSAGE"
+    return durationLabel(result && result.configuredDurationSeconds)
+  }
+
+  function defaultScope() {
+    var testType = root.store ? String(root.store.settings.defaultTestType || "timed") : "timed"
+    return {
+      testType: testType,
+      durationSeconds: testType === "timed" ? Number(root.store.settings.defaultDurationSeconds || 60) : "all",
+      targetWordCount: testType === "words" ? Number(root.store.settings.defaultWordCount || 25) : "all",
+      mode: "standard"
+    }
+  }
+
+  function defaultScopeLabel() {
+    var scope = defaultScope()
+    if (scope.testType === "words") return scope.targetWordCount + " WORDS"
+    if (scope.testType === "passage") return "PASSAGE"
+    return durationLabel(scope.durationSeconds)
+  }
+
   function optionLabel(value) {
     var text = String(value || "mixed").replace(/[-_]/g, " ")
     if (text === "1") return "Easy"
@@ -128,11 +152,10 @@ Item {
     Text {
       text: {
         if (!root.store || root.store.history.length === 0) return ""
-        var duration = Number(root.store.settings.defaultDurationSeconds || 60)
-        var scope = { durationSeconds: duration, mode: "standard" }
+        var scope = root.defaultScope()
         var bestEn = root.store.best("en", scope)
         var bestFa = root.store.best("fa", scope)
-        return root.durationLabel(duration) + " STANDARD BEST   EN " + (bestEn === null ? "—" : Number(bestEn).toFixed(1) + " WPM")
+        return root.defaultScopeLabel() + " STANDARD BEST   EN " + (bestEn === null ? "—" : Number(bestEn).toFixed(1) + " WPM")
           + "   ·   PARSI " + (bestFa === null ? "—" : Number(bestFa).toFixed(1) + " WPM")
       }
       visible: text !== ""
@@ -269,7 +292,7 @@ Item {
             }
 
             Text {
-              text: root.durationLabel(modelData.configuredDurationSeconds)
+              text: root.testTypeLabel(modelData)
                 + "  ·  " + (String(modelData.mode || "standard") === "adaptive" ? "ADAPTIVE" : "STANDARD")
                 + "  ·  " + root.optionLabel(modelData.category).toUpperCase()
                 + "  ·  " + root.optionLabel(modelData.difficulty).toUpperCase()
