@@ -31,6 +31,9 @@ Item {
   property var attemptedPositions: ({})
   property var opportunityPositions: ({})
   property var opportunities: ({})
+  property var hesitationEvents: []
+  property double lastInputMs: 0
+  readonly property int hesitationThresholdMs: 1000
   property var wpmSamples: []
   property int lastSampleSecond: 0
   property bool suppressInput: false
@@ -60,6 +63,9 @@ Item {
     nextOptions.targetWordCount = nextOptions.testType === "words" && [10, 25, 50, 100].indexOf(Number(nextOptions.targetWordCount)) >= 0
       ? Number(nextOptions.targetWordCount) : 0
     if (!Array.isArray(nextOptions.adaptiveTargets)) nextOptions.adaptiveTargets = []
+    if (!Array.isArray(nextOptions.adaptiveBigrams)) nextOptions.adaptiveBigrams = []
+    if (!Array.isArray(nextOptions.adaptiveWords)) nextOptions.adaptiveWords = []
+    if (!Array.isArray(nextOptions.adaptiveHesitationCharacters)) nextOptions.adaptiveHesitationCharacters = []
     if (!Array.isArray(nextOptions.recentPassageIds)) nextOptions.recentPassageIds = []
     if (!Array.isArray(nextOptions.retryPassageIds)) nextOptions.retryPassageIds = []
     nextOptions.retryRequested = nextOptions.retryRequested === true
@@ -95,19 +101,35 @@ Item {
     }
     if (!built && options.mode === "adaptive") {
       var adaptiveTargets = options.adaptiveTargets
-      if (adaptiveTargets.length === 0 && store) {
-        adaptiveTargets = AdaptivePractice.rankTargets(store.history, options.language || "en", store.settings).characters
+      var hasAdaptivePatterns = adaptiveTargets.length > 0 || options.adaptiveBigrams.length > 0
+        || options.adaptiveWords.length > 0 || options.adaptiveHesitationCharacters.length > 0
+      if (!hasAdaptivePatterns && store) {
+        var adaptiveAnalysis = AdaptivePractice.rankTargets(store.history, options.language || "en", store.settings)
+        adaptiveTargets = adaptiveAnalysis.characters
         options.adaptiveTargets = adaptiveTargets
+        options.adaptiveBigrams = adaptiveAnalysis.bigrams
+        options.adaptiveWords = adaptiveAnalysis.words
+        options.adaptiveHesitationCharacters = adaptiveAnalysis.hesitationCharacters
+        hasAdaptivePatterns = adaptiveAnalysis.available
       }
-      if (adaptiveTargets.length > 0) {
+      if (hasAdaptivePatterns) {
+        var contentTargets = {
+          bigrams: options.adaptiveBigrams,
+          words: options.adaptiveWords,
+          hesitationCharacters: options.adaptiveHesitationCharacters,
+          settings: normalizationOptions
+        }
         built = options.testType === "words"
           ? AdaptivePractice.buildAdaptiveWordTest(library ? library.passages : [], options.language || "en",
-              adaptiveTargets, options.targetWordCount, options.recentPassageIds)
+              adaptiveTargets, options.targetWordCount, options.recentPassageIds, contentTargets)
           : AdaptivePractice.buildAdaptiveTest(library ? library.passages : [], options.language || "en",
-              adaptiveTargets, target, options.recentPassageIds)
+              adaptiveTargets, target, options.recentPassageIds, contentTargets)
         if (!built.text || Number(built.matchedPassages || 0) <= 0) {
           options.mode = "standard"
           options.adaptiveTargets = []
+          options.adaptiveBigrams = []
+          options.adaptiveWords = []
+          options.adaptiveHesitationCharacters = []
           built = options.testType === "words"
             ? PassageLoader.buildWordTest(library ? library.passages : [], options.language || "en",
                 "mixed", "mixed", options.targetWordCount)
@@ -142,6 +164,9 @@ Item {
       options.category = "common"
       options.difficulty = "mixed"
       options.adaptiveTargets = []
+      options.adaptiveBigrams = []
+      options.adaptiveWords = []
+      options.adaptiveHesitationCharacters = []
       built = options.testType === "passage"
         ? PassageLoader.buildPassageTest(library ? library.passages : [], options.language || "en", "common", "mixed")
         : options.testType === "words"
@@ -163,6 +188,8 @@ Item {
     attemptedPositions = ({})
     opportunityPositions = ({})
     opportunities = ({})
+    hesitationEvents = []
+    lastInputMs = 0
     wpmSamples = []
     lastSampleSecond = 0
     errorMessage = expectedText ? "" : "No passages matched these options."
@@ -210,6 +237,8 @@ Item {
     var oldChars = Normalization.characters(typedText)
     var newChars = Normalization.characters(comparableValue)
     var expectedChars = Normalization.characters(expectedText)
+    var inputNow = Date.now()
+    var wasRunning = running
     var common = 0
     while (common < oldChars.length && common < newChars.length && oldChars[common] === newChars[common]) common++
 
@@ -225,6 +254,15 @@ Item {
     for (var seenKey in opportunityPositions) seen[seenKey] = opportunityPositions[seenKey]
     var chance = {}
     for (var chanceKey in opportunities) chance[chanceKey] = opportunities[chanceKey]
+
+    if (newChars.length > common && common < expectedChars.length && wasRunning && lastInputMs > 0) {
+      var delayMs = Math.min(60000, Math.max(0, inputNow - lastInputMs))
+      if (delayMs >= hesitationThresholdMs) {
+        var nextHesitations = hesitationEvents.slice()
+        nextHesitations.push({ character: expectedChars[common], delayMs: delayMs })
+        hesitationEvents = nextHesitations
+      }
+    }
 
     for (var i = common; i < newChars.length; i++) {
       if (i >= expectedChars.length) break
@@ -256,6 +294,7 @@ Item {
     opportunityPositions = seen
     opportunities = chance
     errorEvents = newEvents
+    if (newChars.length !== oldChars.length || common < oldChars.length) lastInputMs = inputNow
     typedText = newChars.slice(0, expectedChars.length).join("")
     if (passagePageReady) updatePassagePage(false)
     else schedulePageLayout(true)
@@ -283,7 +322,7 @@ Item {
     var values = Metrics.calculate(totalEntered, correctAttempts, finalEvaluation.incorrect, elapsedSeconds, Metrics.completedWordCount(expectedText, Normalization.characters(typedText).length))
     var includeCorrected = store ? store.settings.includeCorrectedErrorsInDifficulty !== false : true
     var result = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: String(Date.now()) + "-" + Math.floor(Math.random() * 1000000),
       startedAt: new Date(startedMs || Date.now()).toISOString(),
       completedAt: new Date().toISOString(),
@@ -307,8 +346,14 @@ Item {
       backspaces: backspaces,
       passageIds: passageIds,
       adaptiveTargets: options.mode === "adaptive" ? options.adaptiveTargets : [],
+      adaptiveBigrams: options.mode === "adaptive" ? options.adaptiveBigrams : [],
+      adaptiveWords: options.mode === "adaptive" ? options.adaptiveWords : [],
+      adaptiveHesitationCharacters: options.mode === "adaptive" ? options.adaptiveHesitationCharacters : [],
       characterStats: Metrics.characterStats(errorEvents, opportunities, normalizationOptions),
       difficultCharacters: Metrics.difficultCharacters(errorEvents, opportunities, includeCorrected, 3),
+      difficultBigrams: Metrics.difficultBigrams(expectedText, errorEvents, opportunityPositions, normalizationOptions, includeCorrected, 24),
+      difficultWords: Metrics.difficultWords(expectedText, errorEvents, opportunityPositions, normalizationOptions, includeCorrected, 24),
+      hesitationStats: Metrics.hesitationStats(hesitationEvents, normalizationOptions, 24),
       substitutions: Metrics.substitutions(errorEvents, includeCorrected),
       wpmSamples: wpmSamples
     }

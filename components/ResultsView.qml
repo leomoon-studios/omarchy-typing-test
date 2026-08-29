@@ -117,6 +117,41 @@ Item {
     return output
   }
 
+  function adaptivePatternText() {
+    var groups = []
+    var bigrams = value("adaptiveBigrams", [])
+    var words = value("adaptiveWords", [])
+    var hesitations = value("adaptiveHesitationCharacters", [])
+    if (bigrams.length > 0) groups.push("PAIRS  " + bigrams.join("  "))
+    if (words.length > 0) groups.push("WORDS  " + words.join("  "))
+    if (hesitations.length > 0) groups.push("PAUSES BEFORE  " + hesitations.join("  "))
+    return groups.join("     ")
+  }
+
+  function deepAnalysisCards() {
+    var bigramRows = value("difficultBigrams", [])
+    var bigramValues = []
+    for (var bigramIndex = 0; bigramIndex < Math.min(6, bigramRows.length); bigramIndex++)
+      bigramValues.push(bigramRows[bigramIndex].bigram + "  " + (Number(bigramRows[bigramIndex].errorRate || 0) * 100).toFixed(0) + "%")
+
+    var wordRows = value("difficultWords", [])
+    var wordValues = []
+    for (var wordIndex = 0; wordIndex < Math.min(6, wordRows.length); wordIndex++)
+      wordValues.push(wordRows[wordIndex].word + "  " + Number(wordRows[wordIndex].errorOccurrences || 0) + "/" + Number(wordRows[wordIndex].opportunities || 0))
+
+    var hesitationRows = value("hesitationStats", [])
+    var hesitationValues = []
+    for (var hesitationIndex = 0; hesitationIndex < Math.min(6, hesitationRows.length); hesitationIndex++)
+      hesitationValues.push(displayCharacter(hesitationRows[hesitationIndex].character) + "  ×" + Number(hesitationRows[hesitationIndex].count || 0)
+        + "  " + (Number(hesitationRows[hesitationIndex].averageDelayMs || 0) / 1000).toFixed(1) + "s")
+
+    return [
+      { label: "DIFFICULT PAIRS", text: bigramValues.length ? bigramValues.join("     ") : "No difficult character pairs detected." },
+      { label: "DIFFICULT WORDS", text: wordValues.length ? wordValues.join("     ") : "No difficult words detected." },
+      { label: "LONG PAUSES", text: hesitationValues.length ? hesitationValues.join("     ") : "No inter-key pauses over one second." }
+    ]
+  }
+
   ScrollView {
     id: resultsScroll
     anchors.fill: parent
@@ -231,6 +266,15 @@ Item {
           spacing: Style.spacing.xs
 
           Text { text: "ADAPTIVE TARGETS"; color: Color.accent; font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true; Layout.fillWidth: true }
+          Text {
+            visible: root.adaptivePatternText() !== ""
+            text: root.adaptivePatternText()
+            color: Color.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+          }
           Repeater {
             model: root.adaptivePerformance()
 
@@ -284,6 +328,49 @@ Item {
         MetricCard { compact: true; fontFamily: root.fontFamily; label: "Uncorrected"; value: String(root.value("uncorrectedErrors", 0)); Layout.fillWidth: true }
         MetricCard { compact: true; fontFamily: root.fontFamily; label: "Backspaces"; value: String(root.value("backspaces", 0)); Layout.fillWidth: true }
         MetricCard { compact: true; fontFamily: root.fontFamily; label: "Duration"; value: root.durationLabel(root.value("durationSeconds", 0)); Layout.fillWidth: true }
+      }
+
+      Text { text: "DEEP ANALYSIS"; color: Color.muted; font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
+
+      GridLayout {
+        columns: width >= Style.space(760) ? 3 : 1
+        columnSpacing: Style.spacing.md
+        rowSpacing: Style.spacing.sm
+        Layout.fillWidth: true
+
+        Repeater {
+          model: root.deepAnalysisCards()
+
+          BorderSurface {
+            required property var modelData
+            Layout.fillWidth: true
+            Layout.preferredHeight: analysisContent.implicitHeight + contentTopInset + contentBottomInset
+            color: Style.normalFillFor(Color.foreground, Color.accent)
+            borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
+            radius: Style.cornerRadius
+            padding: Style.spacing.md
+
+            ColumnLayout {
+              id: analysisContent
+              anchors.fill: parent
+              anchors.topMargin: parent.contentTopInset
+              anchors.rightMargin: parent.contentRightInset
+              anchors.bottomMargin: parent.contentBottomInset
+              anchors.leftMargin: parent.contentLeftInset
+              spacing: Style.spacing.xs
+
+              Text { text: modelData.label; color: Color.muted; font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
+              Text {
+                text: modelData.text
+                color: Color.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+              }
+            }
+          }
+        }
       }
 
       CoachingSummary {

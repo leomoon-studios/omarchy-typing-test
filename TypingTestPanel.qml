@@ -134,6 +134,9 @@ Item {
       difficulty: "mixed",
       mode: "adaptive",
       adaptiveTargets: analysis.characters,
+      adaptiveBigrams: analysis.bigrams,
+      adaptiveWords: analysis.words,
+      adaptiveHesitationCharacters: analysis.hesitationCharacters,
       recentPassageIds: AdaptivePractice.recentPassageIds(dataStore.history, selectedLanguage, 3)
     })
   }
@@ -149,6 +152,9 @@ Item {
     completedOptions.difficulty = result.difficulty || "mixed"
     completedOptions.mode = result.mode || "standard"
     completedOptions.adaptiveTargets = result.adaptiveTargets || []
+    completedOptions.adaptiveBigrams = result.adaptiveBigrams || []
+    completedOptions.adaptiveWords = result.adaptiveWords || []
+    completedOptions.adaptiveHesitationCharacters = result.adaptiveHesitationCharacters || []
     completedOptions.retryRequested = false
     completedOptions.retryPassageIds = []
     activeOptions = completedOptions
@@ -186,6 +192,9 @@ Item {
       difficulty: result.difficulty || "mixed",
       mode: result.mode || "standard",
       adaptiveTargets: result.adaptiveTargets || [],
+      adaptiveBigrams: result.adaptiveBigrams || [],
+      adaptiveWords: result.adaptiveWords || [],
+      adaptiveHesitationCharacters: result.adaptiveHesitationCharacters || [],
       recentPassageIds: AdaptivePractice.recentPassageIds(dataStore.history, result.language || "en", 3)
     }
     currentView = "results"

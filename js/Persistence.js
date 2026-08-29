@@ -131,9 +131,9 @@ function sanitizeResult(value) {
 
   var language = enumValue(value.language, ["en", "fa"], "en")
   if (value.language !== undefined && value.language !== language) issues.push("language")
-  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 3)
+  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 4)
   if (value.schemaVersion !== undefined && (!isFiniteNumberValue(value.schemaVersion) || Number(value.schemaVersion) !== declaredSchema)) issues.push("schemaVersion")
-  var schemaVersion = declaredSchema >= 3 ? 3 : declaredSchema >= 2 ? 2 : 1
+  var schemaVersion = declaredSchema >= 4 ? 4 : declaredSchema >= 3 ? 3 : declaredSchema >= 2 ? 2 : 1
   var mode = enumValue(value.mode, ["standard", "adaptive"], "standard")
   if (value.mode !== undefined && value.mode !== mode) issues.push("mode")
   var testType = enumValue(value.testType, ["timed", "words", "passage"], "timed")
@@ -201,6 +201,26 @@ function sanitizeResult(value) {
     if (adaptiveTargets.indexOf(targetCharacter) < 0) adaptiveTargets.push(targetCharacter)
   }
 
+  function aggregateTargetList(name, maximum, maximumLength) {
+    var output = []
+    if (value[name] !== undefined && !Array.isArray(value[name])) issues.push(name)
+    var source = Array.isArray(value[name]) ? value[name] : []
+    if (source.length > maximum) issues.push(name + ".length")
+    for (var index = 0; index < source.length && output.length < maximum; index++) {
+      var item = cleanString(source[index], "")
+      if (!item || /\s/.test(item) || item.length > maximumLength) {
+        issues.push(name + "[" + index + "]")
+        continue
+      }
+      if (output.indexOf(item) < 0) output.push(item)
+    }
+    return output
+  }
+
+  var adaptiveBigrams = aggregateTargetList("adaptiveBigrams", 5, 8)
+  var adaptiveWords = aggregateTargetList("adaptiveWords", 5, 48)
+  var adaptiveHesitationCharacters = aggregateTargetList("adaptiveHesitationCharacters", 5, 4)
+
   var characterStats = []
   if (value.characterStats !== undefined && !Array.isArray(value.characterStats)) issues.push("characterStats")
   var characterSource = Array.isArray(value.characterStats) ? value.characterStats : []
@@ -221,6 +241,70 @@ function sanitizeResult(value) {
       opportunities: statOpportunities,
       firstAttemptErrors: statFirstErrors,
       totalErrors: statTotalErrors
+    })
+  }
+
+  var difficultBigrams = []
+  if (value.difficultBigrams !== undefined && !Array.isArray(value.difficultBigrams)) issues.push("difficultBigrams")
+  var bigramSource = Array.isArray(value.difficultBigrams) ? value.difficultBigrams : []
+  if (bigramSource.length > 32) issues.push("difficultBigrams.length")
+  for (var bigramIndex = 0; bigramIndex < bigramSource.length && difficultBigrams.length < 32; bigramIndex++) {
+    var bigramRow = bigramSource[bigramIndex]
+    if (!isObject(bigramRow)) { issues.push("difficultBigrams[" + bigramIndex + "]"); continue }
+    var bigram = cleanString(bigramRow.bigram, "")
+    if (!bigram || /\s/.test(bigram) || bigram.length > 8) { issues.push("difficultBigrams[" + bigramIndex + "].bigram"); continue }
+    var bigramOpportunities = finiteInteger(bigramRow.opportunities, 0, 0, 1000000)
+    var bigramFirstErrors = finiteInteger(bigramRow.firstAttemptErrors, 0, 0, bigramOpportunities)
+    var bigramTotalErrors = finiteInteger(bigramRow.totalErrors, bigramFirstErrors, bigramFirstErrors, 1000000)
+    difficultBigrams.push({
+      bigram: bigram,
+      opportunities: bigramOpportunities,
+      firstAttemptErrors: bigramFirstErrors,
+      totalErrors: bigramTotalErrors,
+      errorRate: finiteNumber(bigramRow.errorRate, bigramOpportunities > 0 ? bigramFirstErrors / bigramOpportunities : 0, 0, 1)
+    })
+  }
+
+  var difficultWords = []
+  if (value.difficultWords !== undefined && !Array.isArray(value.difficultWords)) issues.push("difficultWords")
+  var wordSource = Array.isArray(value.difficultWords) ? value.difficultWords : []
+  if (wordSource.length > 32) issues.push("difficultWords.length")
+  for (var wordIndex = 0; wordIndex < wordSource.length && difficultWords.length < 32; wordIndex++) {
+    var wordRow = wordSource[wordIndex]
+    if (!isObject(wordRow)) { issues.push("difficultWords[" + wordIndex + "]"); continue }
+    var word = cleanString(wordRow.word, "")
+    if (!word || /\s/.test(word) || word.length > 48) { issues.push("difficultWords[" + wordIndex + "].word"); continue }
+    var wordOpportunities = finiteInteger(wordRow.opportunities, 0, 0, 1000000)
+    var errorOccurrences = finiteInteger(wordRow.errorOccurrences, 0, 0, wordOpportunities)
+    var wordTotalErrors = finiteInteger(wordRow.totalErrors, errorOccurrences, errorOccurrences, 1000000)
+    difficultWords.push({
+      word: word,
+      opportunities: wordOpportunities,
+      errorOccurrences: errorOccurrences,
+      totalErrors: wordTotalErrors,
+      errorRate: finiteNumber(wordRow.errorRate, wordOpportunities > 0 ? errorOccurrences / wordOpportunities : 0, 0, 1)
+    })
+  }
+
+  var hesitationStats = []
+  if (value.hesitationStats !== undefined && !Array.isArray(value.hesitationStats)) issues.push("hesitationStats")
+  var hesitationSource = Array.isArray(value.hesitationStats) ? value.hesitationStats : []
+  if (hesitationSource.length > 32) issues.push("hesitationStats.length")
+  for (var hesitationIndex = 0; hesitationIndex < hesitationSource.length && hesitationStats.length < 32; hesitationIndex++) {
+    var hesitationRow = hesitationSource[hesitationIndex]
+    if (!isObject(hesitationRow)) { issues.push("hesitationStats[" + hesitationIndex + "]"); continue }
+    var hesitationCharacter = cleanString(hesitationRow.character, "")
+    if (!hesitationCharacter || /\s/.test(hesitationCharacter) || hesitationCharacter.length > 4) { issues.push("hesitationStats[" + hesitationIndex + "].character"); continue }
+    var hesitationCount = finiteInteger(hesitationRow.count, 0, 0, 1000000)
+    var hesitationTotal = finiteNumber(hesitationRow.totalDelayMs, 0, 0, 60000000)
+    var hesitationAverage = finiteNumber(hesitationRow.averageDelayMs, hesitationCount > 0 ? hesitationTotal / hesitationCount : 0, 0, 60000)
+    var hesitationMaximum = finiteNumber(hesitationRow.maxDelayMs, hesitationAverage, 0, 60000)
+    hesitationStats.push({
+      character: hesitationCharacter,
+      count: hesitationCount,
+      totalDelayMs: hesitationTotal,
+      averageDelayMs: hesitationAverage,
+      maxDelayMs: hesitationMaximum
     })
   }
 
@@ -290,8 +374,14 @@ function sanitizeResult(value) {
       backspaces: integerField("backspaces", 0),
       passageIds: passageIds,
       adaptiveTargets: adaptiveTargets,
+      adaptiveBigrams: adaptiveBigrams,
+      adaptiveWords: adaptiveWords,
+      adaptiveHesitationCharacters: adaptiveHesitationCharacters,
       characterStats: characterStats,
       difficultCharacters: difficultCharacters,
+      difficultBigrams: difficultBigrams,
+      difficultWords: difficultWords,
+      hesitationStats: hesitationStats,
       substitutions: substitutions,
       wpmSamples: wpmSamples
     },

@@ -171,3 +171,141 @@ function characterStats(events, opportunities, options) {
   result.sort(function(a, b) { return String(a.character).localeCompare(String(b.character)) })
   return result
 }
+
+function difficultBigrams(expected, events, opportunityPositions, options, includeCorrected, maximumRows) {
+  var characters = Normalization.characters(expected)
+  var seen = opportunityPositions || {}
+  var table = {}
+
+  function keyAt(position) {
+    if (position <= 0 || position >= characters.length) return ""
+    var first = Normalization.normalizeCharacter(characters[position - 1], options || {})
+    var second = Normalization.normalizeCharacter(characters[position], options || {})
+    if (!first || !second || /\s/.test(first) || /\s/.test(second)
+        || first === "\u200c" || second === "\u200c") return ""
+    return first + second
+  }
+
+  for (var position = 1; position < characters.length; position++) {
+    if (!seen[position]) continue
+    var bigram = keyAt(position)
+    if (!bigram) continue
+    if (!table[bigram]) table[bigram] = { bigram: bigram, opportunities: 0, firstAttemptErrors: 0, totalErrors: 0 }
+    table[bigram].opportunities++
+  }
+
+  var source = Array.isArray(events) ? events : []
+  for (var eventIndex = 0; eventIndex < source.length; eventIndex++) {
+    var event = source[eventIndex] || {}
+    if (event.corrected && !includeCorrected) continue
+    var eventBigram = keyAt(Math.round(Number(event.position) || 0))
+    if (!eventBigram) continue
+    if (!table[eventBigram]) table[eventBigram] = { bigram: eventBigram, opportunities: 0, firstAttemptErrors: 0, totalErrors: 0 }
+    table[eventBigram].totalErrors++
+    if (event.firstAttempt !== false) table[eventBigram].firstAttemptErrors++
+  }
+
+  var result = []
+  for (var name in table) {
+    var row = table[name]
+    if (row.totalErrors <= 0) continue
+    row.errorRate = row.opportunities > 0 ? Math.min(1, row.firstAttemptErrors / row.opportunities) : 0
+    result.push(row)
+  }
+  result.sort(function(a, b) {
+    if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate
+    if (b.totalErrors !== a.totalErrors) return b.totalErrors - a.totalErrors
+    return b.opportunities - a.opportunities
+  })
+  return result.slice(0, Math.max(1, Math.round(Number(maximumRows) || 24)))
+}
+
+function analysisWord(value, options) {
+  var word = Normalization.normalizeText(value, options || {}).trim().toLowerCase()
+  word = word.replace(/^[.,!?;:()[\]{}'"«»،؛؟]+/, "").replace(/[.,!?;:()[\]{}'"«»،؛؟]+$/, "")
+  if (!word || /\s/.test(word) || word.length > 48) return ""
+  return word
+}
+
+function difficultWords(expected, events, opportunityPositions, options, includeCorrected, maximumRows) {
+  var characters = Normalization.characters(expected)
+  var seen = opportunityPositions || {}
+  var occurrences = []
+  var positionToOccurrence = {}
+  var start = 0
+  while (start < characters.length) {
+    while (start < characters.length && /\s/.test(characters[start])) start++
+    if (start >= characters.length) break
+    var end = start + 1
+    while (end < characters.length && !/\s/.test(characters[end])) end++
+    var word = analysisWord(characters.slice(start, end).join(""), options)
+    if (word) {
+      var occurrence = { word: word, start: start, end: end, reached: false, firstError: false, totalErrors: 0 }
+      var occurrenceIndex = occurrences.length
+      for (var position = start; position < end; position++) {
+        positionToOccurrence[position] = occurrenceIndex
+        if (seen[position]) occurrence.reached = true
+      }
+      occurrences.push(occurrence)
+    }
+    start = end
+  }
+
+  var source = Array.isArray(events) ? events : []
+  for (var eventIndex = 0; eventIndex < source.length; eventIndex++) {
+    var event = source[eventIndex] || {}
+    if (event.corrected && !includeCorrected) continue
+    var mappedIndex = positionToOccurrence[Math.round(Number(event.position) || 0)]
+    if (mappedIndex === undefined) continue
+    occurrences[mappedIndex].totalErrors++
+    if (event.firstAttempt !== false) occurrences[mappedIndex].firstError = true
+  }
+
+  var table = {}
+  for (var occurrenceIndex = 0; occurrenceIndex < occurrences.length; occurrenceIndex++) {
+    var current = occurrences[occurrenceIndex]
+    if (!table[current.word]) table[current.word] = { word: current.word, opportunities: 0, errorOccurrences: 0, totalErrors: 0 }
+    if (current.reached) table[current.word].opportunities++
+    if (current.firstError) table[current.word].errorOccurrences++
+    table[current.word].totalErrors += current.totalErrors
+  }
+
+  var result = []
+  for (var name in table) {
+    var row = table[name]
+    if (row.totalErrors <= 0) continue
+    row.errorRate = row.opportunities > 0 ? Math.min(1, row.errorOccurrences / row.opportunities) : 0
+    result.push(row)
+  }
+  result.sort(function(a, b) {
+    if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate
+    if (b.totalErrors !== a.totalErrors) return b.totalErrors - a.totalErrors
+    return b.opportunities - a.opportunities
+  })
+  return result.slice(0, Math.max(1, Math.round(Number(maximumRows) || 24)))
+}
+
+function hesitationStats(events, options, maximumRows) {
+  var table = {}
+  var source = Array.isArray(events) ? events : []
+  for (var index = 0; index < source.length; index++) {
+    var event = source[index] || {}
+    var character = Normalization.normalizeCharacter(event.character, options || {})
+    var delay = Math.max(0, Math.min(60000, Number(event.delayMs) || 0))
+    if (!character || /\s/.test(character) || character === "\u200c" || delay < 1000) continue
+    if (!table[character]) table[character] = { character: character, count: 0, totalDelayMs: 0, maxDelayMs: 0 }
+    table[character].count++
+    table[character].totalDelayMs += delay
+    table[character].maxDelayMs = Math.max(table[character].maxDelayMs, delay)
+  }
+  var result = []
+  for (var name in table) {
+    table[name].averageDelayMs = table[name].count > 0 ? table[name].totalDelayMs / table[name].count : 0
+    result.push(table[name])
+  }
+  result.sort(function(a, b) {
+    if (b.count !== a.count) return b.count - a.count
+    return b.averageDelayMs - a.averageDelayMs
+  })
+  return result.slice(0, Math.max(1, Math.round(Number(maximumRows) || 24)))
+}

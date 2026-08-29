@@ -3,6 +3,7 @@
 
 var DEFAULT_WINDOW = 10
 var MAX_TARGETS = 5
+var MAX_PATTERN_TARGETS = 3
 var RECENCY_DECAY = 0.85
 var MIN_OPPORTUNITIES = 8
 var MIN_ERRORS = 2
@@ -36,6 +37,26 @@ function sourceStats(result) {
   return result && Array.isArray(result.difficultCharacters) ? result.difficultCharacters : []
 }
 
+function rankErrorPatterns(table, keyName, maximum) {
+  var ranked = []
+  for (var name in table) {
+    var row = table[name]
+    if (row.weightedOpportunities <= 0 || row.weightedErrors <= 0 || row.testsWithError < 2) continue
+    var rate = row.weightedErrors / row.weightedOpportunities
+    var confidence = Math.min(1, row.weightedOpportunities / 6)
+    var recurrence = Math.min(1, row.testsWithError / 3)
+    row.errorRate = rate
+    row.score = rate * confidence * (0.7 + 0.3 * recurrence)
+    ranked.push(row)
+  }
+  ranked.sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score
+    if (b.weightedErrors !== a.weightedErrors) return b.weightedErrors - a.weightedErrors
+    return String(a[keyName]).localeCompare(String(b[keyName]))
+  })
+  return ranked.slice(0, maximum)
+}
+
 function rankTargets(history, language, settings, requestedWindow) {
   var selectedLanguage = language === "fa" ? "fa" : "en"
   var configuredWindow = requestedWindow === undefined
@@ -50,6 +71,9 @@ function rankTargets(history, language, settings, requestedWindow) {
   }
 
   var table = {}
+  var bigramTable = {}
+  var wordTable = {}
+  var hesitationTable = {}
   for (var resultIndex = 0; resultIndex < matching.length; resultIndex++) {
     var weight = Math.pow(RECENCY_DECAY, resultIndex)
     var stats = sourceStats(matching[resultIndex])
@@ -75,6 +99,45 @@ function rankTargets(history, language, settings, requestedWindow) {
         seenErrors[character] = true
       }
     }
+
+    var bigrams = Array.isArray(matching[resultIndex].difficultBigrams) ? matching[resultIndex].difficultBigrams : []
+    for (var bigramIndex = 0; bigramIndex < bigrams.length; bigramIndex++) {
+      var bigramRow = bigrams[bigramIndex] || {}
+      var bigram = String(bigramRow.bigram || "")
+      if (!bigram || /\s/.test(bigram) || bigram.length > 8) continue
+      if (!bigramTable[bigram]) bigramTable[bigram] = { bigram: bigram, weightedOpportunities: 0, weightedErrors: 0, testsWithError: 0 }
+      bigramTable[bigram].weightedOpportunities += Math.max(0, finiteNumber(bigramRow.opportunities, 0)) * weight
+      var bigramErrors = Math.max(0, finiteNumber(bigramRow.firstAttemptErrors, finiteNumber(bigramRow.totalErrors, 0)))
+      bigramTable[bigram].weightedErrors += bigramErrors * weight
+      if (bigramErrors > 0) bigramTable[bigram].testsWithError++
+    }
+
+    var words = Array.isArray(matching[resultIndex].difficultWords) ? matching[resultIndex].difficultWords : []
+    for (var wordIndex = 0; wordIndex < words.length; wordIndex++) {
+      var wordRow = words[wordIndex] || {}
+      var word = String(wordRow.word || "").toLowerCase()
+      if (!word || /\s/.test(word) || word.length > 48) continue
+      if (!wordTable[word]) wordTable[word] = { word: word, weightedOpportunities: 0, weightedErrors: 0, testsWithError: 0 }
+      wordTable[word].weightedOpportunities += Math.max(0, finiteNumber(wordRow.opportunities, 0)) * weight
+      var wordErrors = Math.max(0, finiteNumber(wordRow.errorOccurrences, finiteNumber(wordRow.totalErrors, 0)))
+      wordTable[word].weightedErrors += wordErrors * weight
+      if (wordErrors > 0) wordTable[word].testsWithError++
+    }
+
+    var hesitations = Array.isArray(matching[resultIndex].hesitationStats) ? matching[resultIndex].hesitationStats : []
+    for (var hesitationIndex = 0; hesitationIndex < hesitations.length; hesitationIndex++) {
+      var hesitationRow = hesitations[hesitationIndex] || {}
+      var hesitationCharacter = normalizedCharacter(hesitationRow.character, settings)
+      if (!isTargetCharacter(hesitationCharacter, selectedLanguage)) continue
+      if (!hesitationTable[hesitationCharacter]) hesitationTable[hesitationCharacter] = {
+        character: hesitationCharacter, weightedCount: 0, weightedDelay: 0, testsWithHesitation: 0
+      }
+      var hesitationCount = Math.max(0, finiteNumber(hesitationRow.count, 0))
+      hesitationTable[hesitationCharacter].weightedCount += hesitationCount * weight
+      hesitationTable[hesitationCharacter].weightedDelay += Math.max(0, finiteNumber(hesitationRow.totalDelayMs,
+        finiteNumber(hesitationRow.averageDelayMs, 0) * hesitationCount)) * weight
+      if (hesitationCount > 0) hesitationTable[hesitationCharacter].testsWithHesitation++
+    }
   }
 
   var ranked = []
@@ -98,18 +161,41 @@ function rankTargets(history, language, settings, requestedWindow) {
   })
 
   var targets = ranked.slice(0, MAX_TARGETS)
+  var bigramTargets = rankErrorPatterns(bigramTable, "bigram", MAX_PATTERN_TARGETS)
+  var wordTargets = rankErrorPatterns(wordTable, "word", MAX_PATTERN_TARGETS)
+  var hesitationTargets = []
+  for (var hesitationName in hesitationTable) {
+    var hesitationTarget = hesitationTable[hesitationName]
+    if (hesitationTarget.weightedCount < 2 || hesitationTarget.testsWithHesitation < 2) continue
+    hesitationTarget.averageDelayMs = hesitationTarget.weightedDelay / hesitationTarget.weightedCount
+    hesitationTarget.score = hesitationTarget.averageDelayMs * Math.min(1, hesitationTarget.weightedCount / 3)
+      * (0.7 + 0.3 * Math.min(1, hesitationTarget.testsWithHesitation / 3))
+    hesitationTargets.push(hesitationTarget)
+  }
+  hesitationTargets.sort(function(a, b) {
+    if (b.score !== a.score) return b.score - a.score
+    return String(a.character).localeCompare(String(b.character))
+  })
+  hesitationTargets = hesitationTargets.slice(0, MAX_PATTERN_TARGETS)
   var enoughTests = matching.length >= 3
+  var hasTargets = targets.length > 0 || bigramTargets.length > 0 || wordTargets.length > 0 || hesitationTargets.length > 0
   return {
-    available: enoughTests && targets.length > 0,
+    available: enoughTests && hasTargets,
     analyzedTests: matching.length,
     historyWindow: historyWindow,
     language: selectedLanguage,
     targets: targets,
     characters: targets.map(function(row) { return row.character }),
+    bigramTargets: bigramTargets,
+    bigrams: bigramTargets.map(function(row) { return row.bigram }),
+    wordTargets: wordTargets,
+    words: wordTargets.map(function(row) { return row.word }),
+    hesitationTargets: hesitationTargets,
+    hesitationCharacters: hesitationTargets.map(function(row) { return row.character }),
     reason: !enoughTests
       ? "Complete at least three " + (selectedLanguage === "fa" ? "Parsi" : "English") + " tests to unlock adaptive practice."
-      : targets.length === 0
-        ? "No character has enough recent errors for adaptive practice yet."
+      : !hasTargets
+        ? "No recurring error or hesitation pattern has enough recent evidence yet."
         : ""
   }
 }
@@ -147,8 +233,10 @@ function allowedCategory(language, category) {
   return language === "fa" && category === "formal"
 }
 
-function passageScore(passage, characters) {
+function passageScore(passage, characters, contentTargets) {
   var text = String(passage && passage.text || "")
+  var patterns = contentTargets || {}
+  var lowerText = Normalization.normalizeText(text, patterns.settings || {}).toLowerCase()
   var total = 0
   var unique = 0
   for (var index = 0; index < characters.length; index++) {
@@ -156,11 +244,34 @@ function passageScore(passage, characters) {
     if (count > 0) unique++
     total += count * Math.max(1, characters.length - index)
   }
+  var bigrams = Array.isArray(patterns.bigrams) ? patterns.bigrams : []
+  for (var bigramIndex = 0; bigramIndex < bigrams.length; bigramIndex++) {
+    var bigramCount = countCharacter(lowerText, String(bigrams[bigramIndex] || "").toLowerCase())
+    if (bigramCount > 0) unique++
+    total += bigramCount * 8
+  }
+  var passageWords = lowerText.split(/\s+/)
+  var words = Array.isArray(patterns.words) ? patterns.words : []
+  for (var wordIndex = 0; wordIndex < words.length; wordIndex++) {
+    var targetWord = String(words[wordIndex] || "").toLowerCase()
+    var wordCount = 0
+    for (var passageWordIndex = 0; passageWordIndex < passageWords.length; passageWordIndex++) {
+      if (passageWords[passageWordIndex].replace(/^[.,!?;:()[\]{}'"«»،؛؟]+/, "").replace(/[.,!?;:()[\]{}'"«»،؛؟]+$/, "") === targetWord) wordCount++
+    }
+    if (wordCount > 0) unique++
+    total += wordCount * 14
+  }
+  var hesitationCharacters = Array.isArray(patterns.hesitationCharacters) ? patterns.hesitationCharacters : []
+  for (var hesitationIndex = 0; hesitationIndex < hesitationCharacters.length; hesitationIndex++) {
+    var hesitationCount = countCharacter(lowerText, String(hesitationCharacters[hesitationIndex] || "").toLowerCase())
+    if (hesitationCount > 0) unique++
+    total += hesitationCount * 3
+  }
   var density = text.length > 0 ? total / text.length * 100 : 0
   return unique * 4 + density
 }
 
-function adaptiveCandidates(passages, language, targetCharacters, avoidedIds) {
+function adaptiveCandidates(passages, language, targetCharacters, avoidedIds, contentTargets) {
   var characters = Array.isArray(targetCharacters) ? targetCharacters.slice(0, MAX_TARGETS) : []
   var avoided = Array.isArray(avoidedIds) ? avoidedIds : []
   var candidates = []
@@ -171,7 +282,7 @@ function adaptiveCandidates(passages, language, targetCharacters, avoidedIds) {
     if (!String(passage.id || "") || !String(passage.text || "").trim()) continue
     candidates.push({
       passage: passage,
-      score: passageScore(passage, characters),
+      score: passageScore(passage, characters, contentTargets),
       avoided: avoided.indexOf(String(passage.id || "")) >= 0
     })
   }
@@ -185,8 +296,8 @@ function adaptiveCandidates(passages, language, targetCharacters, avoidedIds) {
   return { candidates: candidates, characters: characters }
 }
 
-function buildAdaptiveTest(passages, language, targetCharacters, targetLength, avoidedIds) {
-  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds)
+function buildAdaptiveTest(passages, language, targetCharacters, targetLength, avoidedIds, contentTargets) {
+  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds, contentTargets)
   var candidates = ranked.candidates
   var characters = ranked.characters
 
@@ -214,9 +325,9 @@ function buildAdaptiveTest(passages, language, targetCharacters, targetLength, a
   }
 }
 
-function buildAdaptiveWordTest(passages, language, targetCharacters, targetWordCount, avoidedIds) {
+function buildAdaptiveWordTest(passages, language, targetCharacters, targetWordCount, avoidedIds, contentTargets) {
   var desiredWords = Math.max(1, Math.round(finiteNumber(targetWordCount, 25)))
-  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds)
+  var ranked = adaptiveCandidates(passages, language, targetCharacters, avoidedIds, contentTargets)
   var candidates = ranked.candidates
   var selectedWords = []
   var ids = []

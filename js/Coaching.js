@@ -56,6 +56,58 @@ function strongestSubstitution(result) {
   return best
 }
 
+function aggregateRisk(result) {
+  var words = result && Array.isArray(result.difficultWords) ? result.difficultWords : []
+  if (words.length > 0) {
+    var word = words[0]
+    return {
+      kind: "difficult-word",
+      text: "The word “" + String(word.word || "") + "” caused errors in "
+        + Math.round(finiteNumber(word.errorOccurrences, 0)) + " of "
+        + Math.round(finiteNumber(word.opportunities, 0)) + " attempts."
+    }
+  }
+  var bigrams = result && Array.isArray(result.difficultBigrams) ? result.difficultBigrams : []
+  if (bigrams.length > 0) {
+    var bigram = bigrams[0]
+    return {
+      kind: "difficult-bigram",
+      text: "The character pair “" + String(bigram.bigram || "") + "” was your strongest recurring error pattern ("
+        + (finiteNumber(bigram.errorRate, 0) * 100).toFixed(0) + "% first-attempt error rate)."
+    }
+  }
+  var hesitations = result && Array.isArray(result.hesitationStats) ? result.hesitationStats : []
+  if (hesitations.length > 0) {
+    var hesitation = hesitations[0]
+    return {
+      kind: "hesitation",
+      text: "You paused before “" + displayCharacter(hesitation.character) + "” "
+        + Math.round(finiteNumber(hesitation.count, 0)) + " time"
+        + (Math.round(finiteNumber(hesitation.count, 0)) === 1 ? "" : "s") + ", averaging "
+        + (finiteNumber(hesitation.averageDelayMs, 0) / 1000).toFixed(1) + " seconds."
+    }
+  }
+  return null
+}
+
+function adaptiveLabels(analysis) {
+  var labels = []
+  var sources = [
+    analysis && analysis.characters,
+    analysis && analysis.bigrams,
+    analysis && analysis.words,
+    analysis && analysis.hesitationCharacters
+  ]
+  for (var sourceIndex = 0; sourceIndex < sources.length && labels.length < 3; sourceIndex++) {
+    var source = Array.isArray(sources[sourceIndex]) ? sources[sourceIndex] : []
+    for (var index = 0; index < source.length && labels.length < 3; index++) {
+      var label = String(source[index] || "")
+      if (label && labels.indexOf(label) < 0) labels.push(label)
+    }
+  }
+  return labels
+}
+
 function paceDrop(result) {
   var samples = result && Array.isArray(result.wpmSamples) ? result.wpmSamples : []
   if (samples.length < 4) return null
@@ -122,6 +174,7 @@ function recommendation(result, adaptiveAnalysis) {
     var adaptiveTestType = testType === "words" ? "words" : "timed"
     var adaptiveWordCount = adaptiveTestType === "words"
       ? Math.max(10, Math.round(finiteNumber(result && result.targetWordCount, 25))) : 0
+    var targetLabels = adaptiveLabels(adaptiveAnalysis)
     return {
       mode: "adaptive",
       language: language,
@@ -129,10 +182,13 @@ function recommendation(result, adaptiveAnalysis) {
       durationSeconds: adaptiveTestType === "timed" ? Math.min(180, duration) : 0,
       targetWordCount: adaptiveWordCount,
       targets: adaptiveAnalysis.characters || [],
+      bigrams: adaptiveAnalysis.bigrams || [],
+      words: adaptiveAnalysis.words || [],
+      hesitationCharacters: adaptiveAnalysis.hesitationCharacters || [],
       text: "Try a " + (adaptiveTestType === "words" ? adaptiveWordCount + "-word"
           : (Math.min(180, duration) < 60 ? Math.min(180, duration) + "-second" : (Math.min(180, duration) / 60) + "-minute")) + " adaptive "
         + (language === "fa" ? "Parsi" : "English") + " test targeting "
-        + (adaptiveAnalysis.characters || []).slice(0, 3).join(language === "fa" ? "، " : ", ") + "."
+        + targetLabels.join(language === "fa" ? "، " : ", ") + "."
     }
   }
   return {
@@ -158,6 +214,8 @@ function summarize(result, history, adaptiveAnalysis) {
   var baselineReady = baseline.length >= 3
 
   var substitution = strongestSubstitution(result)
+  var patternRisk = aggregateRisk(result)
+  if (patternRisk) risks.push(patternRisk)
   if (substitution) {
     risks.push({
       kind: "substitution",

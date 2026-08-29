@@ -35,13 +35,13 @@ passages, timed and completion-based tests, detailed error analysis, and history
 - Fixed 10, 25, 50, and 100-word tests
 - Full-passage completion tests with an elapsed timer and no countdown
 - Separate result actions for retrying the exact passage or choosing a new passage with the same settings
-- Adaptive English and Parsi practice based on recent difficult characters
+- Adaptive English and Parsi practice based on recent difficult characters, pairs, words, and hesitations
 - Local coaching summaries with practical next-test recommendations
 - Progress charts for WPM, accuracy, consistency, errors, and character trends
 - 400 bundled passages: 200 English and 200 Parsi
 - Gross WPM, net WPM, literal WPM, accuracy, and consistency
-- Corrected/uncorrected errors and difficult-character analysis
-- Targeted practice using difficult characters from previous tests
+- Corrected/uncorrected errors plus difficult-character, bigram, word, and hesitation analysis
+- Targeted practice using aggregate patterns from previous tests
 - Local JSON/JSONL settings and history
 - UTF-8 `.txt` passage imports
 - Bundled Vazirmatn font for consistent English and Parsi rendering
@@ -138,11 +138,13 @@ Supported views are `setup`, `progress`, `history`, and `settings`.
 ~/.local/share/leomoon-studios.typing-test/custom-texts/
 ```
 
-`XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honored when set. Full passages and
-free-form typed input are not stored in history. Recovery files are created only
-when malformed data is found. The latest history snapshot before deleting one or
-all results is kept in `history-backup.jsonl`. Storage failures are shown in the
-plugin instead of being silently ignored.
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` are honored when set. Full passages,
+free-form typed input, and individual hesitation events are not stored in history.
+History keeps bounded aggregate counts and rates for difficult characters,
+character pairs, words, and pause-heavy keys. Recovery files are created only when
+malformed data is found. The latest history snapshot before deleting one or all
+results is kept in `history-backup.jsonl`. Storage failures are shown in the plugin
+instead of being silently ignored.
 
 ## Removal
 

@@ -96,6 +96,39 @@ assert.deepEqual(JSON.parse(JSON.stringify(completeCharacterStats[0])), {
 assert.equal(completeCharacterStats[1].character, "ی");
 assert.equal(completeCharacterStats[1].opportunities, 3);
 
+const reachedPositions = Object.fromEntries(Array.from({ length: 7 }, (_, index) => [index, true]));
+const patternEvents = [
+  { position: 1, expected: "h", actual: "x", corrected: false, firstAttempt: true },
+  { position: 5, expected: "h", actual: "j", corrected: false, firstAttempt: true }
+];
+const difficultBigrams = Metrics.difficultBigrams("the the", patternEvents, reachedPositions, {}, true, 24);
+assert.equal(difficultBigrams[0].bigram, "th");
+assert.equal(difficultBigrams[0].opportunities, 2);
+assert.equal(difficultBigrams[0].firstAttemptErrors, 2);
+assert.equal(difficultBigrams[0].errorRate, 1);
+const difficultWords = Metrics.difficultWords("The the", patternEvents, reachedPositions, {}, true, 24);
+assert.equal(difficultWords[0].word, "the");
+assert.equal(difficultWords[0].opportunities, 2);
+assert.equal(difficultWords[0].errorOccurrences, 2);
+assert.equal(difficultWords[0].totalErrors, 2);
+const persianDifficultWord = Metrics.difficultWords("كتاب کتاب", [
+  { position: 1, expected: "ت", actual: "ب", corrected: false, firstAttempt: true },
+  { position: 6, expected: "ت", actual: "ب", corrected: false, firstAttempt: true }
+], Object.fromEntries(Array.from({ length: 9 }, (_, index) => [index, true])), { persianNormalization: "forgiving" }, true, 24);
+assert.equal(persianDifficultWord.length, 1);
+assert.equal(persianDifficultWord[0].word, "کتاب");
+assert.equal(persianDifficultWord[0].opportunities, 2);
+const hesitationStats = Metrics.hesitationStats([
+  { character: "e", delayMs: 1200 },
+  { character: "e", delayMs: 1800 },
+  { character: "x", delayMs: 999 },
+  { character: " ", delayMs: 2500 }
+], {}, 24);
+assert.equal(hesitationStats.length, 1);
+assert.equal(hesitationStats[0].character, "e");
+assert.equal(hesitationStats[0].count, 2);
+assert.equal(hesitationStats[0].averageDelayMs, 1500);
+
 const parsed = PassageLoader.parseJsonLines('{"id":"one","language":"en","text":"Hello"}\nnot-json\n{"id":"empty","language":"en","text":"   "}\n{"id":"two","language":"fa","text":"سلام"}\n');
 assert.equal(parsed.length, 2);
 assert.equal(PassageLoader.filter(parsed, "fa", "mixed", "mixed").length, 1);
@@ -283,6 +316,28 @@ const repairedPassageResult = Persistence.sanitizeResult({
 assert.equal(repairedPassageResult.value.testType, "passage");
 assert.equal(repairedPassageResult.value.mode, "standard");
 assert.equal(repairedPassageResult.value.targetWordCount, 0);
+const versionFourAnalysisResult = Persistence.sanitizeResult({
+  schemaVersion: 4,
+  id: "version-four-analysis",
+  completedAt: "2026-08-23T16:00:00.000Z",
+  difficultBigrams: [{ bigram: "th", opportunities: 4, firstAttemptErrors: 2, totalErrors: 3, errorRate: 0.5 }],
+  difficultWords: [{ word: "there", opportunities: 3, errorOccurrences: 2, totalErrors: 3, errorRate: 2 / 3 }],
+  hesitationStats: [{ character: "e", count: 2, totalDelayMs: 3000, averageDelayMs: 1500, maxDelayMs: 1800 }],
+  adaptiveBigrams: ["th"],
+  adaptiveWords: ["there"],
+  adaptiveHesitationCharacters: ["e"],
+  typedText: "must not persist",
+  expectedText: "must not persist",
+  hesitationEvents: [{ character: "e", delayMs: 1500 }]
+});
+assert.equal(versionFourAnalysisResult.value.schemaVersion, 4);
+assert.equal(versionFourAnalysisResult.value.difficultBigrams[0].bigram, "th");
+assert.equal(versionFourAnalysisResult.value.difficultWords[0].word, "there");
+assert.equal(versionFourAnalysisResult.value.hesitationStats[0].averageDelayMs, 1500);
+assert.deepEqual(Array.from(versionFourAnalysisResult.value.adaptiveWords), ["there"]);
+for (const privateField of ["typedText", "expectedText", "hesitationEvents"]) {
+  assert.equal(Object.hasOwn(versionFourAnalysisResult.value, privateField), false);
+}
 const mixedHistory = Persistence.parseHistory([
   JSON.stringify(parsedHistory.rows[0]),
   JSON.stringify(versionTwoResult.value)
@@ -422,6 +477,30 @@ const adaptiveWordBuild = AdaptivePractice.buildAdaptiveWordTest([
 ], "en", ["e"], 25, []);
 assert.equal(adaptiveWordBuild.text.split(/\s+/u).length, 25);
 assert.equal(adaptiveWordBuild.wordCount, 25);
+const aggregateAdaptiveHistory = [0, 1, 2].map(index => ({
+  id: `aggregate-${index}`,
+  language: "en",
+  completedAt: `2026-08-${20 - index}T12:00:00.000Z`,
+  characterStats: [],
+  difficultBigrams: [{ bigram: "qu", opportunities: 4, firstAttemptErrors: 2, totalErrors: 2 }],
+  difficultWords: [{ word: "quiet", opportunities: 2, errorOccurrences: 1, totalErrors: 1 }],
+  hesitationStats: [{ character: "q", count: 2, totalDelayMs: 3000, averageDelayMs: 1500, maxDelayMs: 1700 }]
+}));
+const aggregateTargets = AdaptivePractice.rankTargets(aggregateAdaptiveHistory, "en", defaultSettings);
+assert.equal(aggregateTargets.available, true);
+assert.deepEqual(Array.from(aggregateTargets.bigrams), ["qu"]);
+assert.deepEqual(Array.from(aggregateTargets.words), ["quiet"]);
+assert.deepEqual(Array.from(aggregateTargets.hesitationCharacters), ["q"]);
+const aggregateAdaptiveBuild = AdaptivePractice.buildAdaptiveTest([
+  { id: "low-pattern", language: "en", category: "common", text: "Simple words appear in this ordinary sentence." },
+  { id: "high-pattern", language: "en", category: "literature", text: "The quiet queen quickly questioned the quiet crowd." }
+], "en", [], 300, [], {
+  bigrams: aggregateTargets.bigrams,
+  words: aggregateTargets.words,
+  hesitationCharacters: aggregateTargets.hesitationCharacters,
+  settings: defaultSettings
+});
+assert.equal(aggregateAdaptiveBuild.passageIds[0], "high-pattern");
 
 const progressNewest = [];
 for (let index = 10; index >= 1; index--) {
@@ -528,6 +607,16 @@ assert.equal(wordCoaching.baselineCount, 1);
 assert.equal(wordCoaching.recommendation.testType, "words");
 assert.equal(wordCoaching.recommendation.targetWordCount, 25);
 assert.match(wordCoaching.recommendation.text, /25-word adaptive/u);
+const aggregateCoaching = Coaching.summarize({
+  ...coachingResult,
+  id: "aggregate-coaching",
+  difficultWords: [{ word: "quiet", opportunities: 3, errorOccurrences: 2, totalErrors: 2, errorRate: 2 / 3 }],
+  difficultBigrams: [{ bigram: "qu", opportunities: 4, firstAttemptErrors: 2, totalErrors: 2, errorRate: 0.5 }],
+  hesitationStats: [{ character: "q", count: 2, averageDelayMs: 1500, totalDelayMs: 3000, maxDelayMs: 1700 }]
+}, [], aggregateTargets);
+assert.equal(aggregateCoaching.messages[0].kind, "difficult-word");
+assert.match(aggregateCoaching.messages[0].text, /quiet/u);
+assert.match(aggregateCoaching.recommendation.text, /qu|quiet|q/u);
 assert.equal(Coaching.comparableBaseline({
   id: "strict-current", language: "en", configuredDurationSeconds: 60, mode: "standard"
 }, [
@@ -636,13 +725,17 @@ assert.match(panelSource, /function retrySamePassage/u, "results must support ex
 assert.match(panelSource, /function newPassageSameSettings/u, "results must support random repeats with unchanged settings");
 assert.match(panelSource, /currentResult\.passageIds/u, "exact retry must use the completed result's saved passage IDs");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
-assert.match(testViewSource, /schemaVersion:\s*3/u, "new results must use schema version 3");
+assert.match(testViewSource, /schemaVersion:\s*4/u, "new results must use schema version 4");
 assert.match(testViewSource, /testType:\s*options\.testType/u, "new results must identify their test format");
 assert.match(testViewSource, /options\.testType === "timed" && root\.remainingSeconds <= 0/u, "only timed tests may finish from the countdown");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
 assert.match(testViewSource, /sourceValue\.replace\(\/\\u200c\/g/u, "typing input must remove ignored ZWNJs before positional comparison");
 assert.match(testViewSource, /PassageLoader\.buildRetryTest/u, "typing tests must reconstruct exact retries before random selection");
 assert.match(testViewSource, /saved passage is no longer available/u, "missing retry sources must display a fallback notice");
+assert.match(testViewSource, /hesitationThresholdMs:\s*1000/u, "typing tests must use an explicit long-pause threshold");
+assert.match(testViewSource, /Metrics\.difficultBigrams/u, "new results must aggregate difficult character pairs");
+assert.match(testViewSource, /Metrics\.difficultWords/u, "new results must aggregate difficult words");
+assert.match(testViewSource, /Metrics\.hesitationStats/u, "new results must aggregate long inter-key pauses");
 const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
 assert.match(resultsViewSource, /if \(option === "1"\) return "EASY"/u, "results must label numeric difficulty values");
 assert.match(resultsViewSource, /if \(character === " "\) return "Space"/u, "results must label whitespace substitutions");
@@ -651,6 +744,7 @@ assert.match(resultsViewSource, /Scoped PB/u, "results must display the scoped p
 assert.match(resultsViewSource, /text:\s*"Retry same passage"/u, "results must label exact retries explicitly");
 assert.match(resultsViewSource, /text:\s*"New passage, same settings"/u, "results must keep random repeat as a separate action");
 assert.doesNotMatch(resultsViewSource, /text:\s*"Repeat"/u, "results must not retain the ambiguous Repeat action");
+assert.match(resultsViewSource, /text:\s*"DEEP ANALYSIS"/u, "results must display bigram, word, and hesitation analysis");
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
 assert.match(historyViewSource, /if \(testType === "passage"\) return "PASSAGE"/u, "history must label passage-completion results");

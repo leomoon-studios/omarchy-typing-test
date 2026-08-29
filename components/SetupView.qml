@@ -98,6 +98,19 @@ Item {
             mode = "standard";
     }
 
+    function adaptiveTargetText() {
+        var groups = [];
+        if (adaptiveAnalysis.characters.length > 0)
+            groups.push("Keys: " + adaptiveAnalysis.characters.join(language === "fa" ? "، " : ", "));
+        if (adaptiveAnalysis.bigrams.length > 0)
+            groups.push("Pairs: " + adaptiveAnalysis.bigrams.join(language === "fa" ? "، " : ", "));
+        if (adaptiveAnalysis.words.length > 0)
+            groups.push("Words: " + adaptiveAnalysis.words.join(language === "fa" ? "، " : ", "));
+        if (adaptiveAnalysis.hesitationCharacters.length > 0)
+            groups.push("Pauses before: " + adaptiveAnalysis.hesitationCharacters.join(language === "fa" ? "، " : ", "));
+        return groups.join("     ");
+    }
+
     function start() {
         var selectedDuration = durationSeconds === 0 ? customSeconds : durationSeconds;
         var values = {
@@ -109,6 +122,9 @@ Item {
             "difficulty": difficulty,
             "mode": mode,
             "adaptiveTargets": mode === "adaptive" ? adaptiveAnalysis.characters : [],
+            "adaptiveBigrams": mode === "adaptive" ? adaptiveAnalysis.bigrams : [],
+            "adaptiveWords": mode === "adaptive" ? adaptiveAnalysis.words : [],
+            "adaptiveHesitationCharacters": mode === "adaptive" ? adaptiveAnalysis.hesitationCharacters : [],
             "recentPassageIds": mode === "adaptive"
                 ? AdaptivePractice.recentPassageIds(store ? store.history : [], language, 3)
                 : []
@@ -302,7 +318,7 @@ Item {
 
                 Text {
                     text: root.adaptiveAnalysis.available
-                        ? root.adaptiveAnalysis.characters.join(root.language === "fa" ? "     " : "   ")
+                        ? root.adaptiveTargetText()
                         : root.adaptiveAnalysis.reason
                     color: root.adaptiveAnalysis.available ? Color.foreground : Color.muted
                     font.family: root.fontFamily
