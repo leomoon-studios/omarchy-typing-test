@@ -38,6 +38,8 @@ passages, timed and completion-based tests, detailed error analysis, and history
 - Adaptive English and Parsi practice based on recent difficult characters, pairs, words, and hesitations
 - Local coaching summaries with practical next-test recommendations
 - Progress charts for WPM, accuracy, consistency, errors, and character trends
+- English and Parsi keyboard heatmaps with per-key speed, opportunities, and error rate
+- Targeted drills for a key, hand, finger, or the current comparison's weakest keys
 - 400 bundled passages: 200 English and 200 Parsi
 - Gross WPM, net WPM, literal WPM, accuracy, and consistency
 - Corrected/uncorrected errors plus difficult-character, bigram, word, and hesitation analysis
@@ -103,7 +105,9 @@ Choose **Adaptive Practice** on Setup to build a test around recent difficult
 characters. Adaptive analysis is kept separate for English and Parsi and unlocks
 after three tests in that language when a character has enough useful history.
 Completed tests include a short local coaching summary, while Progress shows
-language-specific trends without sending history anywhere.
+language-specific trends and keyboard heatmaps without sending history anywhere.
+The heatmap follows the active comparison filters. Select any key directly, or
+start a drill for one hand, one finger, or the weakest measured keys.
 
 On Results, choose **Retry same passage** to reconstruct the test from its saved
 passage IDs, or **New passage, same settings** for a fresh selection. If a saved

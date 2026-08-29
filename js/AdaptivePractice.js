@@ -3,6 +3,7 @@
 
 var DEFAULT_WINDOW = 10
 var MAX_TARGETS = 5
+var MAX_DRILL_TARGETS = 32
 var MAX_PATTERN_TARGETS = 3
 var RECENCY_DECAY = 0.85
 var MIN_OPPORTUNITIES = 8
@@ -272,7 +273,7 @@ function passageScore(passage, characters, contentTargets) {
 }
 
 function adaptiveCandidates(passages, language, targetCharacters, avoidedIds, contentTargets) {
-  var characters = Array.isArray(targetCharacters) ? targetCharacters.slice(0, MAX_TARGETS) : []
+  var characters = Array.isArray(targetCharacters) ? targetCharacters.slice(0, MAX_DRILL_TARGETS) : []
   var avoided = Array.isArray(avoidedIds) ? avoidedIds : []
   var candidates = []
   var source = Array.isArray(passages) ? passages : []

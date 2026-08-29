@@ -309,3 +309,57 @@ function hesitationStats(events, options, maximumRows) {
   })
   return result.slice(0, Math.max(1, Math.round(Number(maximumRows) || 24)))
 }
+
+function keyTimingStats(timingEvents, errorEvents, opportunities, options) {
+  var table = {}
+
+  function ensure(character) {
+    var value = Normalization.normalizeCharacter(character, options || {})
+    if (!value || /\s/.test(value) || value === "\u200c") return null
+    if (!table[value]) table[value] = {
+      character: value,
+      opportunities: 0,
+      firstAttemptErrors: 0,
+      totalErrors: 0,
+      timedAttempts: 0,
+      totalIntervalMs: 0,
+      maxIntervalMs: 0
+    }
+    return table[value]
+  }
+
+  var chances = opportunities || {}
+  for (var character in chances) {
+    var opportunityRow = ensure(character)
+    if (opportunityRow) opportunityRow.opportunities += Math.max(0, Math.round(Number(chances[character]) || 0))
+  }
+
+  var errors = Array.isArray(errorEvents) ? errorEvents : []
+  for (var errorIndex = 0; errorIndex < errors.length; errorIndex++) {
+    var errorRow = ensure(errors[errorIndex] && errors[errorIndex].expected)
+    if (!errorRow) continue
+    errorRow.totalErrors++
+    if (errors[errorIndex].firstAttempt !== false) errorRow.firstAttemptErrors++
+  }
+
+  var timings = Array.isArray(timingEvents) ? timingEvents : []
+  for (var timingIndex = 0; timingIndex < timings.length; timingIndex++) {
+    var timingRow = ensure(timings[timingIndex] && timings[timingIndex].character)
+    var interval = Math.max(0, Math.min(60000, Number(timings[timingIndex] && timings[timingIndex].intervalMs) || 0))
+    if (!timingRow || interval <= 0) continue
+    timingRow.timedAttempts++
+    timingRow.totalIntervalMs += interval
+    timingRow.maxIntervalMs = Math.max(timingRow.maxIntervalMs, interval)
+  }
+
+  var result = []
+  for (var name in table) {
+    var row = table[name]
+    row.errorRate = row.opportunities > 0 ? Math.min(1, row.firstAttemptErrors / row.opportunities) : 0
+    row.averageIntervalMs = row.timedAttempts > 0 ? row.totalIntervalMs / row.timedAttempts : 0
+    row.speedCpm = row.averageIntervalMs > 0 ? 60000 / row.averageIntervalMs : 0
+    result.push(row)
+  }
+  result.sort(function(a, b) { return String(a.character).localeCompare(String(b.character)) })
+  return result
+}

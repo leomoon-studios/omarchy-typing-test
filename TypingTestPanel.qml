@@ -141,6 +141,30 @@ Item {
     })
   }
 
+  function startDrill(language, targets, label) {
+    var selectedLanguage = language === "fa" ? "fa" : "en"
+    var characters = Array.isArray(targets) ? targets.slice(0, 32) : []
+    if (characters.length === 0) return
+    var selectedTestType = dataStore.settings.defaultTestType === "words" ? "words" : "timed"
+    startTest({
+      language: selectedLanguage,
+      testType: selectedTestType,
+      durationSeconds: selectedTestType === "timed"
+        ? Math.max(15, Number(dataStore.settings.defaultDurationSeconds || 60)) : 0,
+      targetWordCount: selectedTestType === "words"
+        ? Math.max(10, Number(dataStore.settings.defaultWordCount || 25)) : 0,
+      category: "mixed",
+      difficulty: "mixed",
+      mode: "adaptive",
+      adaptiveTargets: characters,
+      adaptiveBigrams: [],
+      adaptiveWords: [],
+      adaptiveHesitationCharacters: [],
+      drillLabel: String(label || "Targeted keys"),
+      recentPassageIds: AdaptivePractice.recentPassageIds(dataStore.history, selectedLanguage, 3)
+    })
+  }
+
   function finishTest(result) {
     currentResult = result
     var completedOptions = copyOptions(activeOptions)
@@ -261,6 +285,7 @@ Item {
       onHistoryRequested: root.currentView = "history"
       onComparisonUpdated: function(comparison) { root.progressComparison = comparison }
       onResultRequested: function(result, comparison) { root.showHistoricalResult(result, comparison) }
+      onDrillRequested: function(language, targets, label) { root.startDrill(language, targets, label) }
     }
   }
 

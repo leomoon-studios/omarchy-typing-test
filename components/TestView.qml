@@ -32,6 +32,7 @@ Item {
   property var opportunityPositions: ({})
   property var opportunities: ({})
   property var hesitationEvents: []
+  property var keyTimingEvents: []
   property double lastInputMs: 0
   readonly property int hesitationThresholdMs: 1000
   property var wpmSamples: []
@@ -189,6 +190,7 @@ Item {
     opportunityPositions = ({})
     opportunities = ({})
     hesitationEvents = []
+    keyTimingEvents = []
     lastInputMs = 0
     wpmSamples = []
     lastSampleSecond = 0
@@ -257,6 +259,11 @@ Item {
 
     if (newChars.length > common && common < expectedChars.length && wasRunning && lastInputMs > 0) {
       var delayMs = Math.min(60000, Math.max(0, inputNow - lastInputMs))
+      if (delayMs > 0) {
+        var nextTimings = keyTimingEvents.slice()
+        nextTimings.push({ character: expectedChars[common], intervalMs: delayMs })
+        keyTimingEvents = nextTimings
+      }
       if (delayMs >= hesitationThresholdMs) {
         var nextHesitations = hesitationEvents.slice()
         nextHesitations.push({ character: expectedChars[common], delayMs: delayMs })
@@ -322,7 +329,7 @@ Item {
     var values = Metrics.calculate(totalEntered, correctAttempts, finalEvaluation.incorrect, elapsedSeconds, Metrics.completedWordCount(expectedText, Normalization.characters(typedText).length))
     var includeCorrected = store ? store.settings.includeCorrectedErrorsInDifficulty !== false : true
     var result = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       id: String(Date.now()) + "-" + Math.floor(Math.random() * 1000000),
       startedAt: new Date(startedMs || Date.now()).toISOString(),
       completedAt: new Date().toISOString(),
@@ -354,6 +361,7 @@ Item {
       difficultBigrams: Metrics.difficultBigrams(expectedText, errorEvents, opportunityPositions, normalizationOptions, includeCorrected, 24),
       difficultWords: Metrics.difficultWords(expectedText, errorEvents, opportunityPositions, normalizationOptions, includeCorrected, 24),
       hesitationStats: Metrics.hesitationStats(hesitationEvents, normalizationOptions, 24),
+      keyTimingStats: Metrics.keyTimingStats(keyTimingEvents, errorEvents, opportunities, normalizationOptions),
       substitutions: Metrics.substitutions(errorEvents, includeCorrected),
       wpmSamples: wpmSamples
     }
@@ -615,7 +623,8 @@ Item {
 
     Text {
       visible: root.options.mode === "adaptive"
-      text: "ADAPTIVE  ·  " + (root.options.adaptiveTargets || []).join("  ")
+      text: String(root.options.drillLabel || "ADAPTIVE").toUpperCase()
+        + "  ·  " + (root.options.adaptiveTargets || []).join("  ")
       color: Color.muted
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption

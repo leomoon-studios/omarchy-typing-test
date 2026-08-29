@@ -26,6 +26,7 @@ const AdaptivePractice = qmlLibrary("js/AdaptivePractice.js", { Normalization })
 const Coaching = qmlLibrary("js/Coaching.js");
 const Progress = qmlLibrary("js/Progress.js");
 const KeyboardNavigation = qmlLibrary("js/KeyboardNavigation.js");
+const KeyboardHeatmap = qmlLibrary("js/KeyboardHeatmap.js");
 
 const navigationRoot = { parent: null, name: "root" };
 const navigationFirst = { parent: navigationRoot, name: "first", focused: false };
@@ -128,6 +129,19 @@ assert.equal(hesitationStats.length, 1);
 assert.equal(hesitationStats[0].character, "e");
 assert.equal(hesitationStats[0].count, 2);
 assert.equal(hesitationStats[0].averageDelayMs, 1500);
+const keyTimingStats = Metrics.keyTimingStats([
+  { character: "e", intervalMs: 200 },
+  { character: "e", intervalMs: 300 },
+  { character: "x", intervalMs: 150 },
+  { character: " ", intervalMs: 400 }
+], [{ expected: "e", firstAttempt: true }], { e: 4, x: 2, " ": 3 }, {});
+assert.equal(keyTimingStats.length, 2);
+assert.equal(keyTimingStats[0].character, "e");
+assert.equal(keyTimingStats[0].opportunities, 4);
+assert.equal(keyTimingStats[0].errorRate, 0.25);
+assert.equal(keyTimingStats[0].averageIntervalMs, 250);
+assert.equal(keyTimingStats[0].speedCpm, 240);
+assert.equal(keyTimingStats[1].character, "x");
 
 const parsed = PassageLoader.parseJsonLines('{"id":"one","language":"en","text":"Hello"}\nnot-json\n{"id":"empty","language":"en","text":"   "}\n{"id":"two","language":"fa","text":"سلام"}\n');
 assert.equal(parsed.length, 2);
@@ -337,6 +351,28 @@ assert.equal(versionFourAnalysisResult.value.hesitationStats[0].averageDelayMs, 
 assert.deepEqual(Array.from(versionFourAnalysisResult.value.adaptiveWords), ["there"]);
 for (const privateField of ["typedText", "expectedText", "hesitationEvents"]) {
   assert.equal(Object.hasOwn(versionFourAnalysisResult.value, privateField), false);
+}
+const versionFiveHeatmapResult = Persistence.sanitizeResult({
+  schemaVersion: 5,
+  id: "version-five-heatmap",
+  completedAt: "2026-08-23T17:00:00.000Z",
+  language: "en",
+  keyTimingStats: [{
+    character: "e", opportunities: 8, firstAttemptErrors: 2, totalErrors: 3,
+    timedAttempts: 4, totalIntervalMs: 1000, averageIntervalMs: 250,
+    maxIntervalMs: 400, speedCpm: 240
+  }],
+  keyTimingEvents: [{ character: "e", intervalMs: 250 }],
+  typedText: "must not persist"
+});
+assert.equal(versionFiveHeatmapResult.value.schemaVersion, 5);
+assert.equal(versionFiveHeatmapResult.value.keyTimingStats.length, 1);
+assert.equal(versionFiveHeatmapResult.value.keyTimingStats[0].character, "e");
+assert.equal(versionFiveHeatmapResult.value.keyTimingStats[0].opportunities, 8);
+assert.equal(versionFiveHeatmapResult.value.keyTimingStats[0].averageIntervalMs, 250);
+assert.equal(versionFiveHeatmapResult.value.keyTimingStats[0].speedCpm, 240);
+for (const privateField of ["typedText", "keyTimingEvents"]) {
+  assert.equal(Object.hasOwn(versionFiveHeatmapResult.value, privateField), false);
 }
 const mixedHistory = Persistence.parseHistory([
   JSON.stringify(parsedHistory.rows[0]),
@@ -575,6 +611,52 @@ assert.equal(Progress.characterTrend(progressSeven, "e", 120).length, 7);
 assert.deepEqual(Array.from(Progress.filterHistory(null, "en", "all")), []);
 assert.equal(Progress.summary(null).count, 0);
 
+const englishLayout = KeyboardHeatmap.layout("en");
+assert.equal(englishLayout.length, 3);
+assert.equal(englishLayout[0][0].character, "q");
+assert.equal(englishLayout[0][0].finger, "left-pinky");
+assert.equal(englishLayout[1].some(key => key.character === "j" && key.finger === "right-index"), true);
+const persianLayout = KeyboardHeatmap.layout("fa");
+assert.equal(persianLayout.length, 3);
+assert.equal(persianLayout[0][0].character, "ض");
+assert.equal(persianLayout[1].some(key => key.character === "ی" && key.finger === "left-middle"), true);
+const englishHeatmap = KeyboardHeatmap.aggregate([
+  {
+    language: "en",
+    keyTimingStats: [
+      { character: "e", opportunities: 8, firstAttemptErrors: 2, totalErrors: 2, timedAttempts: 4, totalIntervalMs: 1000 },
+      { character: "E", opportunities: 2, firstAttemptErrors: 1, totalErrors: 1, timedAttempts: 1, totalIntervalMs: 500 },
+      { character: "q", opportunities: 5, firstAttemptErrors: 4, totalErrors: 4, timedAttempts: 5, totalIntervalMs: 2500 }
+    ]
+  },
+  {
+    language: "fa",
+    keyTimingStats: [{ character: "ی", opportunities: 99, firstAttemptErrors: 99, timedAttempts: 1, totalIntervalMs: 5000 }]
+  },
+  {
+    language: "en",
+    characterStats: [{ character: "x", opportunities: 6, firstAttemptErrors: 2, totalErrors: 3 }]
+  }
+], "en");
+const eHeat = englishHeatmap.keys.find(key => key.character === "e");
+assert.equal(eHeat.opportunities, 10);
+assert.equal(eHeat.speedCpm, 200);
+assert.equal(eHeat.errorRate, 0.3);
+assert.equal(englishHeatmap.keys.find(key => key.character === "x").opportunities, 6);
+assert.equal(englishHeatmap.keys.find(key => key.character === "x").timedAttempts, 0);
+assert.equal(englishHeatmap.keys.find(key => key.character === "ی"), undefined);
+assert.equal(KeyboardHeatmap.weakestTargets(englishHeatmap)[0], "q");
+assert.equal(KeyboardHeatmap.targetsForHand(englishHeatmap, "left").every(character =>
+  englishHeatmap.keys.find(key => key.character === character).hand === "left"), true);
+assert.equal(KeyboardHeatmap.targetsForFinger(englishHeatmap, "left-middle").every(character =>
+  englishHeatmap.keys.find(key => key.character === character).finger === "left-middle"), true);
+assert.equal(KeyboardHeatmap.targetsForHand(englishHeatmap, "left").length,
+  englishHeatmap.keys.filter(key => key.hand === "left").length);
+assert.equal(KeyboardHeatmap.targetsForFinger(englishHeatmap, "left-index").length,
+  englishHeatmap.keys.filter(key => key.finger === "left-index").length);
+assert.equal(KeyboardHeatmap.weakestTargets(englishHeatmap).length <= 5, true);
+assert.equal(KeyboardHeatmap.weakestTargets(KeyboardHeatmap.aggregate([], "en")).length, 0);
+
 const coachingResult = {
   ...progressNewest[0],
   id: "coaching-current",
@@ -724,8 +806,10 @@ assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u
 assert.match(panelSource, /function retrySamePassage/u, "results must support exact passage retries");
 assert.match(panelSource, /function newPassageSameSettings/u, "results must support random repeats with unchanged settings");
 assert.match(panelSource, /currentResult\.passageIds/u, "exact retry must use the completed result's saved passage IDs");
+assert.match(panelSource, /function startDrill/u, "Progress heatmap actions must launch targeted drills");
+assert.match(panelSource, /adaptiveTargets:\s*characters/u, "heatmap drills must feed selected keys into adaptive passage selection");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
-assert.match(testViewSource, /schemaVersion:\s*4/u, "new results must use schema version 4");
+assert.match(testViewSource, /schemaVersion:\s*5/u, "new results must use schema version 5");
 assert.match(testViewSource, /testType:\s*options\.testType/u, "new results must identify their test format");
 assert.match(testViewSource, /options\.testType === "timed" && root\.remainingSeconds <= 0/u, "only timed tests may finish from the countdown");
 assert.match(testViewSource, /Metrics\.characterStats/u, "new results must store safe character aggregates");
@@ -736,6 +820,7 @@ assert.match(testViewSource, /hesitationThresholdMs:\s*1000/u, "typing tests mus
 assert.match(testViewSource, /Metrics\.difficultBigrams/u, "new results must aggregate difficult character pairs");
 assert.match(testViewSource, /Metrics\.difficultWords/u, "new results must aggregate difficult words");
 assert.match(testViewSource, /Metrics\.hesitationStats/u, "new results must aggregate long inter-key pauses");
+assert.match(testViewSource, /Metrics\.keyTimingStats/u, "new results must aggregate per-key speed and errors");
 const resultsViewSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
 assert.match(resultsViewSource, /if \(option === "1"\) return "EASY"/u, "results must label numeric difficulty values");
 assert.match(resultsViewSource, /if \(character === " "\) return "Space"/u, "results must label whitespace substitutions");
@@ -752,12 +837,22 @@ const progressViewSource = fs.readFileSync(path.join(root, "components", "Progre
 assert.match(progressViewSource, /text:\s*"ACTIVE COMPARISON"/u, "Progress must identify the active comparison group");
 assert.match(progressViewSource, /contextLabel:\s*root\.comparison\.label/u, "Progress charts must carry the active comparison label");
 assert.match(progressViewSource, /initialComparison:\s*null/u, "Progress must be able to restore its comparison filters");
+assert.match(progressViewSource, /KeyboardHeatmap\s*\{/u, "Progress must display the bilingual keyboard heatmap");
+assert.match(progressViewSource, /rows:\s*root\.rows/u, "the heatmap must use the active filtered comparison rows");
+assert.match(progressViewSource, /onDrillRequested/u, "Progress must forward keyboard drill actions");
+const keyboardHeatmapSource = fs.readFileSync(path.join(root, "components", "KeyboardHeatmap.qml"), "utf8");
+assert.match(keyboardHeatmapSource, /CPM/u, "heatmap keys must display per-key speed");
+assert.match(keyboardHeatmapSource, /tries/u, "heatmap keys must display opportunity counts");
+assert.match(keyboardHeatmapSource, /% err/u, "heatmap keys must display error rate");
+assert.match(keyboardHeatmapSource, /targetsForHand/u, "heatmap must support hand drills");
+assert.match(keyboardHeatmapSource, /targetsForFinger/u, "heatmap must support finger drills");
+assert.match(keyboardHeatmapSource, /weakestTargets/u, "heatmap must support weak-key drills");
 const setupViewSource = fs.readFileSync(path.join(root, "components", "SetupView.qml"), "utf8");
 for (const format of ["timed", "words", "passage"]) {
   assert.match(setupViewSource, new RegExp(`chooseTestType\\("${format}"\\)`, "u"), `setup must expose ${format} tests`);
 }
 assert.match(setupViewSource, /model:\s*\[10, 25, 50, 100\]/u, "setup must expose 10, 25, 50, and 100-word tests");
-for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml"]) {
+for (const component of ["SetupView.qml", "TestView.qml", "ResultsView.qml", "HistoryView.qml", "SettingsView.qml", "MetricCard.qml", "ProgressView.qml", "ProgressChart.qml", "CoachingSummary.qml", "KeyboardHeatmap.qml"]) {
   const source = fs.readFileSync(path.join(root, "components", component), "utf8");
   assert.doesNotMatch(source, /font\.family:\s*Style\.font\.family/u, `${component} bypasses the bundled font`);
 }

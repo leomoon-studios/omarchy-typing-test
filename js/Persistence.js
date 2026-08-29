@@ -131,9 +131,9 @@ function sanitizeResult(value) {
 
   var language = enumValue(value.language, ["en", "fa"], "en")
   if (value.language !== undefined && value.language !== language) issues.push("language")
-  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 4)
+  var declaredSchema = finiteInteger(value.schemaVersion, 1, 1, 5)
   if (value.schemaVersion !== undefined && (!isFiniteNumberValue(value.schemaVersion) || Number(value.schemaVersion) !== declaredSchema)) issues.push("schemaVersion")
-  var schemaVersion = declaredSchema >= 4 ? 4 : declaredSchema >= 3 ? 3 : declaredSchema >= 2 ? 2 : 1
+  var schemaVersion = declaredSchema >= 5 ? 5 : declaredSchema >= 4 ? 4 : declaredSchema >= 3 ? 3 : declaredSchema >= 2 ? 2 : 1
   var mode = enumValue(value.mode, ["standard", "adaptive"], "standard")
   if (value.mode !== undefined && value.mode !== mode) issues.push("mode")
   var testType = enumValue(value.testType, ["timed", "words", "passage"], "timed")
@@ -191,8 +191,8 @@ function sanitizeResult(value) {
   var adaptiveTargets = []
   if (value.adaptiveTargets !== undefined && !Array.isArray(value.adaptiveTargets)) issues.push("adaptiveTargets")
   var targetSource = Array.isArray(value.adaptiveTargets) ? value.adaptiveTargets : []
-  if (targetSource.length > 5) issues.push("adaptiveTargets.length")
-  for (var targetIndex = 0; targetIndex < targetSource.length && adaptiveTargets.length < 5; targetIndex++) {
+  if (targetSource.length > 32) issues.push("adaptiveTargets.length")
+  for (var targetIndex = 0; targetIndex < targetSource.length && adaptiveTargets.length < 32; targetIndex++) {
     var targetCharacter = cleanString(targetSource[targetIndex], "")
     if (!targetCharacter || /\s/.test(targetCharacter)) {
       issues.push("adaptiveTargets[" + targetIndex + "]")
@@ -308,6 +308,36 @@ function sanitizeResult(value) {
     })
   }
 
+  var keyTimingStats = []
+  if (value.keyTimingStats !== undefined && !Array.isArray(value.keyTimingStats)) issues.push("keyTimingStats")
+  var keyTimingSource = Array.isArray(value.keyTimingStats) ? value.keyTimingStats : []
+  if (keyTimingSource.length > 256) issues.push("keyTimingStats.length")
+  for (var keyTimingIndex = 0; keyTimingIndex < keyTimingSource.length && keyTimingStats.length < 256; keyTimingIndex++) {
+    var keyTimingRow = keyTimingSource[keyTimingIndex]
+    if (!isObject(keyTimingRow)) { issues.push("keyTimingStats[" + keyTimingIndex + "]"); continue }
+    var keyCharacter = cleanString(keyTimingRow.character, "")
+    if (!keyCharacter || /\s/.test(keyCharacter) || keyCharacter.length > 4) { issues.push("keyTimingStats[" + keyTimingIndex + "].character"); continue }
+    var keyOpportunities = finiteInteger(keyTimingRow.opportunities, 0, 0, 1000000)
+    var keyFirstErrors = finiteInteger(keyTimingRow.firstAttemptErrors, 0, 0, keyOpportunities)
+    var keyTotalErrors = finiteInteger(keyTimingRow.totalErrors, keyFirstErrors, keyFirstErrors, 1000000)
+    var timedAttempts = finiteInteger(keyTimingRow.timedAttempts, 0, 0, 1000000)
+    var totalIntervalMs = finiteNumber(keyTimingRow.totalIntervalMs, 0, 0, 60000000000)
+    var averageIntervalMs = finiteNumber(keyTimingRow.averageIntervalMs,
+      timedAttempts > 0 ? totalIntervalMs / timedAttempts : 0, 0, 60000)
+    keyTimingStats.push({
+      character: keyCharacter,
+      opportunities: keyOpportunities,
+      firstAttemptErrors: keyFirstErrors,
+      totalErrors: keyTotalErrors,
+      errorRate: finiteNumber(keyTimingRow.errorRate, keyOpportunities > 0 ? keyFirstErrors / keyOpportunities : 0, 0, 1),
+      timedAttempts: timedAttempts,
+      totalIntervalMs: totalIntervalMs,
+      averageIntervalMs: averageIntervalMs,
+      maxIntervalMs: finiteNumber(keyTimingRow.maxIntervalMs, averageIntervalMs, 0, 60000),
+      speedCpm: finiteNumber(keyTimingRow.speedCpm, averageIntervalMs > 0 ? 60000 / averageIntervalMs : 0, 0, 60000)
+    })
+  }
+
   var substitutions = []
   if (value.substitutions !== undefined && !Array.isArray(value.substitutions)) issues.push("substitutions")
   var substitutionSource = Array.isArray(value.substitutions) ? value.substitutions : []
@@ -382,6 +412,7 @@ function sanitizeResult(value) {
       difficultBigrams: difficultBigrams,
       difficultWords: difficultWords,
       hesitationStats: hesitationStats,
+      keyTimingStats: keyTimingStats,
       substitutions: substitutions,
       wpmSamples: wpmSamples
     },

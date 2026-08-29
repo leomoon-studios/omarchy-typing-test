@@ -59,6 +59,7 @@ Item {
   signal historyRequested()
   signal resultRequested(var result, var comparison)
   signal comparisonUpdated(var comparison)
+  signal drillRequested(string language, var targets, string label)
 
   focus: true
 
@@ -416,6 +417,16 @@ Item {
         ProgressChart { title: "Accuracy"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.accuracyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
         ProgressChart { title: "Consistency"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.consistencyPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); onPointActivated: function(point) { root.openPoint(point) } }
         ProgressChart { title: "Error rate"; contextLabel: root.comparison.label; suffix: "%"; fontFamily: root.fontFamily; points: root.errorPoints; Layout.fillWidth: true; Layout.preferredHeight: Style.space(152); lineColor: Color.urgent; onPointActivated: function(point) { root.openPoint(point) } }
+      }
+
+      KeyboardHeatmap {
+        rows: root.rows
+        language: root.language
+        fontFamily: root.fontFamily
+        Layout.fillWidth: true
+        onDrillRequested: function(characters, label) {
+          root.drillRequested(root.language, characters, label)
+        }
       }
 
       ColumnLayout {
