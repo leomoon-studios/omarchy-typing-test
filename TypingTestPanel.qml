@@ -34,9 +34,23 @@ Item {
     source: Qt.resolvedUrl("assets/fonts/Vazirmatn-Regular.ttf")
   }
 
+  function toggleBarMenu() {
+    var widget = shell && shell.bar && typeof shell.bar.findPanelWidget === "function"
+      ? shell.bar.findPanelWidget(pluginId)
+      : null
+    if (!widget || typeof widget.toggle !== "function") return false
+    widget.toggle()
+    return true
+  }
+
   function open(payloadJson) {
+    var rawPayload = String(payloadJson || "").trim()
+    // Numbered bar shortcuts use an empty payload. Keep that activation
+    // equivalent to pressing the WPM bar icon instead of skipping its menu.
+    if ((rawPayload === "" || rawPayload === "{}") && toggleBarMenu()) return
+
     var payload = {}
-    try { payload = JSON.parse(payloadJson || "{}") || {} } catch (error) {}
+    try { payload = JSON.parse(rawPayload || "{}") || {} } catch (error) {}
     var requested = String(payload.view || "setup")
     currentView = ["setup", "progress", "history", "settings"].indexOf(requested) >= 0 ? requested : "setup"
     opened = true

@@ -1119,6 +1119,12 @@ const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
 assert.match(panelSource, /"progress"/u, "panel must route to the Progress view");
+assert.match(panelSource,
+  /function toggleBarMenu[\s\S]*?shell\.bar\.findPanelWidget\(pluginId\)[\s\S]*?widget\.toggle\(\)/u,
+  "the panel entry point must be able to toggle its bar menu");
+assert.match(panelSource,
+  /\(rawPayload === "" \|\| rawPayload === "\{\}"\) && toggleBarMenu\(\)/u,
+  "empty numbered-shortcut payloads must open the bar menu instead of Setup");
 assert.equal((panelSource.match(/onDismissRequested:\s*root\.requestDismiss\(\)/gu) || []).length, 4,
   "Setup, Settings, History, and Progress must route Escape dismissal through the panel");
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");
