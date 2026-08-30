@@ -17,6 +17,7 @@ Item {
     readonly property real importControlHeight: Style.spacing.controlHeight
 
     signal backRequested()
+    signal dismissRequested()
 
     focus: true
 
@@ -46,7 +47,10 @@ Item {
 
     Keys.priority: Keys.AfterItem
     Keys.onPressed: function(event) {
-        if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+        if (event.key === Qt.Key_Escape) {
+            root.dismissRequested();
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
             root.moveKeyboardFocus(false);
             event.accepted = true;
         } else if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {

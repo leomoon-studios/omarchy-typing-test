@@ -56,6 +56,7 @@ Item {
       ]
 
   signal backRequested()
+  signal dismissRequested()
   signal historyRequested()
   signal resultRequested(var result, var comparison)
   signal comparisonUpdated(var comparison)
@@ -86,7 +87,10 @@ Item {
 
   Keys.priority: Keys.AfterItem
   Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_Up) {
+    if (event.key === Qt.Key_Escape) {
+      root.dismissRequested()
+      event.accepted = true
+    } else if (event.key === Qt.Key_Up) {
       root.moveKeyboardFocus(false)
       event.accepted = true
     } else if (event.key === Qt.Key_Down) {

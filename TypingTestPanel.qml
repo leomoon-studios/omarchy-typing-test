@@ -295,6 +295,7 @@ Item {
       fontFamily: root.contentFontFamily
       initialComparison: root.progressComparison
       onBackRequested: root.currentView = "setup"
+      onDismissRequested: root.requestDismiss()
       onHistoryRequested: root.currentView = "history"
       onComparisonUpdated: function(comparison) { root.progressComparison = comparison }
       onResultRequested: function(result, comparison) { root.showHistoricalResult(result, comparison) }
@@ -308,6 +309,7 @@ Item {
       store: dataStore
       fontFamily: root.contentFontFamily
       onBackRequested: root.currentView = "setup"
+      onDismissRequested: root.requestDismiss()
       onProgressRequested: root.currentView = "progress"
       onResultRequested: function(result) { root.showHistoricalResult(result) }
     }
@@ -319,6 +321,7 @@ Item {
       store: dataStore
       fontFamily: root.contentFontFamily
       onBackRequested: root.currentView = "setup"
+      onDismissRequested: root.requestDismiss()
     }
   }
 

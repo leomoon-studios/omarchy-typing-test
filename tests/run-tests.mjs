@@ -1119,6 +1119,8 @@ const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
 assert.match(panelSource, /"progress"/u, "panel must route to the Progress view");
+assert.equal((panelSource.match(/onDismissRequested:\s*root\.requestDismiss\(\)/gu) || []).length, 3,
+  "Settings, History, and Progress must route Escape dismissal through the panel");
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");
 assert.match(panelSource, /function comparisonForResult/u, "result pages must receive a comparison context");
 assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u, "Progress-to-result navigation must preserve comparison context");
@@ -1152,7 +1154,11 @@ assert.match(resultsViewSource, /text:\s*"DEEP ANALYSIS"/u, "results must displa
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
 assert.match(historyViewSource, /if \(testType === "passage"\) return "PASSAGE"/u, "history must label passage-completion results");
+assert.match(historyViewSource, /event\.key === Qt\.Key_Escape[\s\S]*?root\.dismissRequested\(\)[\s\S]*?event\.accepted = true/u,
+  "Escape must dismiss History");
 const progressViewSource = fs.readFileSync(path.join(root, "components", "ProgressView.qml"), "utf8");
+assert.match(progressViewSource, /event\.key === Qt\.Key_Escape[\s\S]*?root\.dismissRequested\(\)[\s\S]*?event\.accepted = true/u,
+  "Escape must dismiss Progress");
 assert.match(progressViewSource, /text:\s*"ACTIVE COMPARISON"/u, "Progress must identify the active comparison group");
 assert.match(progressViewSource, /contextLabel:\s*root\.comparison\.label/u, "Progress charts must carry the active comparison label");
 assert.match(progressViewSource, /initialComparison:\s*null/u, "Progress must be able to restore its comparison filters");
@@ -1183,6 +1189,8 @@ for (const format of ["timed", "words", "passage"]) {
 }
 assert.match(setupViewSource, /model:\s*\[10, 25, 50, 100\]/u, "setup must expose 10, 25, 50, and 100-word tests");
 const settingsViewSource = fs.readFileSync(path.join(root, "components", "SettingsView.qml"), "utf8");
+assert.match(settingsViewSource, /event\.key === Qt\.Key_Escape[\s\S]*?root\.dismissRequested\(\)[\s\S]*?event\.accepted = true/u,
+  "Escape must dismiss Settings");
 assert.equal((settingsViewSource.match(/enabled:\s*root\.store\s*&&\s*!root\.store\.importInProgress/gu) || []).length >= 2, true,
   "both remove-import buttons must be disabled while an import is active");
 assert.match(settingsViewSource, /var removed = root\.store && root\.store\.clearCustom/u,
