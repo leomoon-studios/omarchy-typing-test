@@ -10,8 +10,11 @@ function finiteNumber(value, fallback) {
 function average(rows, field) {
   var total = 0
   var count = 0
-  for (var index = 0; index < rows.length; index++) {
-    var value = rows[index][field]
+  var source = Array.isArray(rows) ? rows : []
+  for (var index = 0; index < source.length; index++) {
+    var row = source[index]
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue
+    var value = row[field]
     if (value === null || value === undefined || !isFinite(Number(value))) continue
     total += Number(value)
     count++
@@ -20,6 +23,7 @@ function average(rows, field) {
 }
 
 function matchesFilters(row, filters) {
+  if (!row) return false
   var selected = filters || {}
   var rowTestType = String(row.testType || "timed")
   var testType = String(selected.testType || "all")
@@ -213,7 +217,11 @@ function points(rows) {
 }
 
 function summary(rows) {
-  var source = Array.isArray(rows) ? rows : []
+  var input = Array.isArray(rows) ? rows : []
+  var source = []
+  for (var sourceIndex = 0; sourceIndex < input.length; sourceIndex++) {
+    if (input[sourceIndex] && typeof input[sourceIndex] === "object" && !Array.isArray(input[sourceIndex])) source.push(input[sourceIndex])
+  }
   var recent = source.slice(Math.max(0, source.length - 3))
   var previous = source.slice(Math.max(0, source.length - 6), Math.max(0, source.length - 3))
   var currentWpm = average(recent, "netWpm")

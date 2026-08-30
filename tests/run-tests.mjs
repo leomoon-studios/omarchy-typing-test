@@ -105,6 +105,7 @@ assert.equal(oneMinute.literalWpm, 42);
 assert.equal(oneMinute.accuracy, 98);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 50 }, { grossWpm: 50 }]), 100);
 assert.equal(Metrics.consistency([{ grossWpm: 50 }, { grossWpm: 52 }]), null);
+assert.equal(Metrics.consistency([null, false, [], { grossWpm: 50 }, { grossWpm: 50 }, { grossWpm: 50 }]), 100);
 assert.equal(Metrics.completedWordCount("one two three", 8), 2);
 assert.equal(Metrics.completedWordCount("one two three", 13), 3);
 assert.equal(JSON.stringify(Metrics.evaluateFinal("یک", "يك", { persianNormalization: "forgiving" })), JSON.stringify({ correct: 2, incorrect: 0, entered: 2 }));
@@ -126,10 +127,14 @@ const substitutions = Metrics.substitutions(events, true);
 assert.equal(substitutions[0].expected, "e");
 assert.equal(substitutions[0].actual, "r");
 assert.equal(substitutions[0].count, 2);
+assert.deepEqual(Array.from(Metrics.substitutions([null, false, [], {}, { expected: "a", actual: "s" }], true), row => ({
+  expected: row.expected, actual: row.actual, count: row.count
+})), [{ expected: "a", actual: "s", count: 1 }]);
 const difficult = Metrics.difficultCharacters(events, { e: 10 }, true, 3);
 assert.equal(difficult.length, 1);
 assert.equal(difficult[0].totalErrors, 3);
 assert.equal(difficult[0].firstAttemptErrors, 2);
+assert.deepEqual(Array.from(Metrics.difficultCharacters([null, false, [], {}], { e: 10 }, true, 3)), []);
 const completeCharacterStats = Metrics.characterStats(events, { e: 10, "ي": 3, " ": 4 }, { persianNormalization: "forgiving" });
 assert.equal(completeCharacterStats.length, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(completeCharacterStats[0])), {
@@ -744,6 +749,11 @@ assert.equal(progressCharacters[0].character, "e");
 assert.equal(Progress.characterTrend(progressSeven, "e", 120).length, 7);
 assert.deepEqual(Array.from(Progress.filterHistory(null, "en", "all")), []);
 assert.equal(Progress.summary(null).count, 0);
+const nullSafeProgress = Progress.summary([null, false, "invalid", [], { netWpm: 42, accuracy: 98 }]);
+assert.equal(nullSafeProgress.count, 1);
+assert.equal(nullSafeProgress.bestWpm, 42);
+assert.equal(nullSafeProgress.accuracy, 98);
+assert.equal(Progress.average([null, false, {}], "netWpm"), null);
 const parsiScopedProgress = [
   { id: "fa-scope-match", completedAt: "2026-08-20T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 60, mode: "standard", category: "formal", difficulty: "2", netWpm: 48 },
   { id: "fa-scope-duration", completedAt: "2026-08-19T12:00:00.000Z", language: "fa", testType: "timed", configuredDurationSeconds: 180, mode: "standard", category: "formal", difficulty: "2", netWpm: 52 },
@@ -895,6 +905,16 @@ assert.equal(Coaching.comparableBaseline({
 assert.deepEqual(JSON.parse(JSON.stringify(Coaching.summarize(null, [null], null))), {
   messages: [], baselineCount: 0, recommendation: null
 });
+assert.equal(Coaching.aggregateRisk({
+  difficultWords: [null, false, []],
+  difficultBigrams: [null],
+  hesitationStats: [null]
+}), null);
+assert.equal(Coaching.aggregateRisk({
+  difficultWords: [null],
+  difficultBigrams: [null, { bigram: "th", errorRate: 0.5 }],
+  hesitationStats: []
+}).kind, "difficult-bigram");
 const coachingWithoutHistory = Coaching.summarize({
   ...coachingResult,
   id: "alone",
@@ -995,6 +1015,7 @@ assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink
 assert.match(safeFileSource, /os\.fstat\(fd\)/u, "safe file reads must inspect the opened descriptor");
 assert.match(safeFileSource, /MAX_BYTES/u, "safe file reads must enforce a byte limit");
 assert.match(safeFileSource, /read\(maximum_bytes \+ 1\)/u, "safe file writes must use a bounded read");
+assert.match(safeFileSource, /os\.fsync\(directory_fd\)/u, "atomic writes must sync the containing directory");
 const safeFileTests = spawnSync("python3", [path.join(root, "tests", "test-safe-file.py")], { encoding: "utf8" });
 assert.equal(safeFileTests.status, 0, safeFileTests.stderr || "safe-file tests failed");
 const safeFileQmlSource = fs.readFileSync(path.join(root, "SafeFile.qml"), "utf8");

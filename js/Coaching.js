@@ -10,8 +10,11 @@ function finiteNumber(value, fallback) {
 function average(rows, field) {
   var total = 0
   var count = 0
-  for (var index = 0; index < rows.length; index++) {
-    var value = rows[index] && rows[index][field]
+  var source = Array.isArray(rows) ? rows : []
+  for (var index = 0; index < source.length; index++) {
+    var row = source[index]
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue
+    var value = row[field]
     if (value === null || value === undefined || !isFinite(Number(value))) continue
     total += Number(value)
     count++
@@ -56,10 +59,18 @@ function strongestSubstitution(result) {
   return best
 }
 
+function firstObject(rows) {
+  var source = Array.isArray(rows) ? rows : []
+  for (var index = 0; index < source.length; index++) {
+    if (source[index] && typeof source[index] === "object" && !Array.isArray(source[index])) return source[index]
+  }
+  return null
+}
+
 function aggregateRisk(result) {
   var words = result && Array.isArray(result.difficultWords) ? result.difficultWords : []
-  if (words.length > 0) {
-    var word = words[0]
+  var word = firstObject(words)
+  if (word) {
     return {
       kind: "difficult-word",
       text: "The word “" + String(word.word || "") + "” caused errors in "
@@ -68,8 +79,8 @@ function aggregateRisk(result) {
     }
   }
   var bigrams = result && Array.isArray(result.difficultBigrams) ? result.difficultBigrams : []
-  if (bigrams.length > 0) {
-    var bigram = bigrams[0]
+  var bigram = firstObject(bigrams)
+  if (bigram) {
     return {
       kind: "difficult-bigram",
       text: "The character pair “" + String(bigram.bigram || "") + "” was your strongest recurring error pattern ("
@@ -77,8 +88,8 @@ function aggregateRisk(result) {
     }
   }
   var hesitations = result && Array.isArray(result.hesitationStats) ? result.hesitationStats : []
-  if (hesitations.length > 0) {
-    var hesitation = hesitations[0]
+  var hesitation = firstObject(hesitations)
+  if (hesitation) {
     return {
       kind: "hesitation",
       text: "You paused before “" + displayCharacter(hesitation.character) + "” "

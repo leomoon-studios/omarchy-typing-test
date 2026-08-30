@@ -23,8 +23,11 @@ function calculate(totalEntered, correctKeystrokes, uncorrectedErrors, elapsedSe
 
 function consistency(samples) {
   var values = []
-  for (var i = 0; i < (samples || []).length; i++) {
-    var value = Number(samples[i].grossWpm !== undefined ? samples[i].grossWpm : samples[i])
+  var source = Array.isArray(samples) ? samples : []
+  for (var i = 0; i < source.length; i++) {
+    var sample = source[i]
+    if (sample === null || sample === undefined || typeof sample === "boolean" || Array.isArray(sample)) continue
+    var value = Number(typeof sample === "object" && sample.grossWpm !== undefined ? sample.grossWpm : sample)
     if (isFinite(value) && value >= 0) values.push(value)
   }
   if (values.length < 3) return null
@@ -61,11 +64,15 @@ function evaluateFinal(expected, typed, options) {
 
 function substitutions(events, includeCorrected) {
   var counts = {}
-  var source = events || []
+  var source = Array.isArray(events) ? events : []
   for (var i = 0; i < source.length; i++) {
     var event = source[i]
+    if (!event || typeof event !== "object" || Array.isArray(event)) continue
     if (event.corrected && !includeCorrected) continue
-    var key = String(event.expected || "") + "\u0000" + String(event.actual || "")
+    var expected = String(event.expected || "")
+    var actual = String(event.actual || "")
+    if (!expected && !actual) continue
+    var key = expected + "\u0000" + actual
     if (!counts[key]) counts[key] = { expected: event.expected, actual: event.actual, count: 0 }
     counts[key].count++
   }
@@ -90,9 +97,10 @@ function difficultCharacters(events, opportunities, includeCorrected, minimumOpp
       replacements: {}
     }
   }
-  var source = events || []
+  var source = Array.isArray(events) ? events : []
   for (var i = 0; i < source.length; i++) {
     var event = source[i]
+    if (!event || typeof event !== "object" || Array.isArray(event)) continue
     if (event.corrected && !includeCorrected) continue
     var expected = String(event.expected || "")
     if (!expected || /\s/.test(expected)) continue

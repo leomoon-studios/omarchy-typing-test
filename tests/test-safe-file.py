@@ -8,6 +8,7 @@ import stat
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +53,45 @@ class SafeFileWriteTests(unittest.TestCase):
             )
             self.assertEqual(read_result.returncode, 0)
             self.assertEqual(read_result.stdout, payload)
+
+    def test_file_and_directory_are_synced_in_order(self):
+        with tempfile.TemporaryDirectory(prefix="typing-test-safe-file-") as directory:
+            target = Path(directory) / "data.jsonl"
+            sync_targets = []
+            real_fsync = os.fsync
+
+            def record_sync(descriptor):
+                mode = os.fstat(descriptor).st_mode
+                sync_targets.append("directory" if stat.S_ISDIR(mode) else "file")
+                return real_fsync(descriptor)
+
+            with mock.patch.object(SAFE_FILE.os, "fsync", side_effect=record_sync):
+                result = SAFE_FILE.write_file(target, io.BytesIO(b"durable"), maximum_bytes=1024)
+
+            self.assertEqual(result, 0)
+            self.assertEqual(sync_targets, ["file", "directory"])
+            self.assertEqual(target.read_bytes(), b"durable")
+
+    def test_directory_sync_failure_closes_descriptor_and_leaves_no_temp_file(self):
+        with tempfile.TemporaryDirectory(prefix="typing-test-safe-file-") as directory:
+            target = Path(directory) / "data.jsonl"
+            directory_descriptor = []
+            real_fsync = os.fsync
+
+            def fail_directory_sync(descriptor):
+                if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+                    directory_descriptor.append(descriptor)
+                    raise OSError("simulated directory fsync failure")
+                return real_fsync(descriptor)
+
+            with mock.patch.object(SAFE_FILE.os, "fsync", side_effect=fail_directory_sync):
+                with self.assertRaisesRegex(OSError, "simulated directory fsync failure"):
+                    SAFE_FILE.write_file(target, io.BytesIO(b"replacement"), maximum_bytes=1024)
+
+            self.assertEqual(target.read_bytes(), b"replacement")
+            self.assertEqual(list(Path(directory).glob(".typing-test-*")), [])
+            with self.assertRaises(OSError):
+                os.fstat(directory_descriptor[0])
 
 
 if __name__ == "__main__":

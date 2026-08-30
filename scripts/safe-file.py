@@ -56,16 +56,23 @@ def write_file(path, input_stream=None, maximum_bytes=MAX_BYTES):
     directory = os.path.dirname(path) or "."
     mode = 0o600
     fd, temporary = tempfile.mkstemp(prefix=".typing-test-", dir=directory)
+    directory_fd = None
     try:
         os.fchmod(fd, mode)
         with os.fdopen(fd, "wb") as output:
             output.write(data)
             output.flush()
             os.fsync(output.fileno())
+        directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
         os.replace(temporary, path)
         temporary = None
+        # Persist the directory entry update as well as the file contents so a
+        # reported successful replacement survives a power loss.
+        os.fsync(directory_fd)
         return 0
     finally:
+        if directory_fd is not None:
+            os.close(directory_fd)
         if temporary is not None:
             try:
                 os.unlink(temporary)
