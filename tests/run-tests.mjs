@@ -1040,6 +1040,16 @@ assert.match(settingsViewSource, /id:\s*settingsScroll[\s\S]*?Layout\.fillHeight
 assert.match(settingsViewSource,
   /id:\s*importCollectionField[\s\S]*?verticalPadding:\s*0[\s\S]*?verticalAlignment:\s*TextInput\.AlignVCenter[\s\S]*?Layout\.preferredHeight:\s*root\.importControlHeight/u,
   "the imported collection field must center its text without increasing the shared control height");
+const resultsViewLayoutSource = fs.readFileSync(path.join(root, "components", "ResultsView.qml"), "utf8");
+assert.equal(resultsViewLayoutSource.indexOf("id: resultsHeader") < resultsViewLayoutSource.indexOf("id: resultsScroll"), true,
+  "Results header must remain outside and above its scroll area");
+assert.equal(resultsViewLayoutSource.indexOf("id: resultsScroll") < resultsViewLayoutSource.indexOf("id: resultsFooter"), true,
+  "Results footer must remain outside and below its scroll area");
+assert.match(resultsViewLayoutSource, /id:\s*resultsScroll[\s\S]*?Layout\.fillHeight:\s*true/u,
+  "Results must give the middle scroll area the available height");
+assert.match(resultsViewLayoutSource,
+  /rightPadding:\s*resultsContent\.implicitHeight\s*>\s*height\s*\+\s*0\.5[\s\S]*?ScrollBar\.vertical\.width\s*\+\s*Style\.spacing\.sm/u,
+  "Results must reserve a gutter for its vertical scrollbar when content overflows");
 assert.match(dataStoreSource, /readonly property bool importPickerActive:\s*picker\.running/u,
   "DataStore must expose the import picker lifecycle to the overlay");
 assert.match(panelSource, /visible:\s*root\.opened\s*&&\s*!dataStore\.importPickerActive/u,

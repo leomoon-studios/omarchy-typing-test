@@ -152,43 +152,54 @@ Item {
     ]
   }
 
-  ScrollView {
-    id: resultsScroll
+  ColumnLayout {
     anchors.fill: parent
-    clip: true
-    contentWidth: availableWidth
-    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+    spacing: Style.spacing.md
 
     ColumnLayout {
-      width: resultsScroll.availableWidth
-      spacing: Style.spacing.md
+      id: resultsHeader
+      Layout.fillWidth: true
+      spacing: Style.spacing.xs
+
+      Text {
+        text: "Test complete"
+        color: Color.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.display
+        font.bold: true
+        Layout.fillWidth: true
+      }
+
+      Text {
+        text: (root.value("language", "en") === "fa" ? "PARSI" : "ENGLISH")
+          + "  ·  " + root.testTypeLabel()
+          + "  ·  " + (root.value("mode", "standard") === "adaptive" ? "ADAPTIVE" : "STANDARD")
+          + "  ·  " + root.optionLabel(root.value("category", "common"))
+          + "  ·  " + root.optionLabel(root.value("difficulty", "mixed"))
+        color: Color.muted
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+        Layout.fillWidth: true
+      }
+    }
+
+    ScrollView {
+      id: resultsScroll
+      Layout.fillWidth: true
+      Layout.fillHeight: true
+      clip: true
+      rightPadding: resultsContent.implicitHeight > height + 0.5
+        ? resultsScroll.ScrollBar.vertical.width + Style.spacing.sm
+        : 0
+      contentWidth: availableWidth
+      ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+      ScrollBar.vertical.policy: ScrollBar.AsNeeded
 
       ColumnLayout {
-        Layout.fillWidth: true
-        spacing: Style.spacing.xs
-
-        Text {
-          text: "Test complete"
-          color: Color.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.display
-          font.bold: true
-          Layout.fillWidth: true
-        }
-
-        Text {
-          text: (root.value("language", "en") === "fa" ? "PARSI" : "ENGLISH")
-            + "  ·  " + root.testTypeLabel()
-            + "  ·  " + (root.value("mode", "standard") === "adaptive" ? "ADAPTIVE" : "STANDARD")
-            + "  ·  " + root.optionLabel(root.value("category", "common"))
-            + "  ·  " + root.optionLabel(root.value("difficulty", "mixed"))
-          color: Color.muted
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: true
-          Layout.fillWidth: true
-        }
-      }
+        id: resultsContent
+        width: resultsScroll.availableWidth
+        spacing: Style.spacing.md
 
       GridLayout {
         columns: width >= Style.space(700) ? 3 : 1
@@ -519,19 +530,21 @@ Item {
         }
       }
 
-      Item { Layout.minimumHeight: Style.spacing.xs }
-      GridLayout {
-        Layout.fillWidth: true
-        columns: width >= Style.space(900) ? (root.adaptiveAnalysis.available ? 6 : 5) : 2
-        columnSpacing: Style.spacing.sm
-        rowSpacing: Style.spacing.sm
-        Button { text: "History"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.historyRequested() }
-        Button { text: "Progress"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.progressRequested() }
-        Button { visible: root.adaptiveAnalysis.available; text: "Adaptive practice"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.practiceRequested() }
-        Button { text: "New test"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newTestRequested() }
-        Button { text: "Retry same passage"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.retryRequested() }
-        Button { text: "New passage, same settings"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newPassageRequested() }
       }
+    }
+
+    GridLayout {
+      id: resultsFooter
+      Layout.fillWidth: true
+      columns: width >= Style.space(900) ? (root.adaptiveAnalysis.available ? 6 : 5) : 2
+      columnSpacing: Style.spacing.sm
+      rowSpacing: Style.spacing.sm
+      Button { text: "History"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.historyRequested() }
+      Button { text: "Progress"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.progressRequested() }
+      Button { visible: root.adaptiveAnalysis.available; text: "Adaptive practice"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.practiceRequested() }
+      Button { text: "New test"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newTestRequested() }
+      Button { text: "Retry same passage"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.retryRequested() }
+      Button { text: "New passage, same settings"; fontFamily: root.fontFamily; bordered: true; focusable: true; Layout.fillWidth: true; onClicked: root.newPassageRequested() }
     }
   }
 }
