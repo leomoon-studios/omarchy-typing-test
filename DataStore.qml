@@ -40,6 +40,7 @@ QtObject {
   property string pendingImportCollection: ""
   property int pendingImportCount: 0
   property string pendingImportPreviousText: ""
+  property int pendingImportOperationId: 0
   readonly property bool importPickerActive: picker.running
 
   signal importFinished(int count, string collection)
@@ -266,6 +267,7 @@ QtObject {
     pendingImportCollection = ""
     pendingImportCount = 0
     pendingImportPreviousText = ""
+    pendingImportOperationId = 0
   }
 
   function failImport(message) {
@@ -273,22 +275,31 @@ QtObject {
     importFailed(String(message || "The text file could not be imported."))
   }
 
-  function completeImport(language) {
-    if (!importInProgress || pendingImportLanguage !== language || pendingImportCount <= 0) return
+  function completeImport(language, operationId) {
+    if (!importInProgress || pendingImportLanguage !== language || pendingImportCount <= 0
+        || pendingImportOperationId !== operationId) return
     var count = pendingImportCount
     var collection = pendingImportCollection
     resetPendingImport()
     importFinished(count, collection)
   }
 
-  function failCustomSave(language, message) {
-    if (importInProgress && pendingImportLanguage === language) {
+  function failCustomSave(language, operationId, message) {
+    if (importInProgress && pendingImportLanguage === language && pendingImportOperationId === operationId) {
       if (language === "fa") customPersianText = pendingImportPreviousText
       else customEnglishText = pendingImportPreviousText
       failImport(message)
       return
     }
     reportError(message)
+  }
+
+  function supersedeCustomSave(language, operationId) {
+    if (importInProgress && pendingImportLanguage === language && pendingImportOperationId === operationId) {
+      if (language === "fa") customPersianText = pendingImportPreviousText
+      else customEnglishText = pendingImportPreviousText
+      failImport("The import was replaced by a newer storage operation before it could be saved.")
+    }
   }
 
   function finishImport(raw) {
@@ -309,23 +320,28 @@ QtObject {
     pendingImportPreviousText = previous
     if (importLanguage === "fa") {
       customPersianText = updated
-      customFaFile.setText(updated)
+      pendingImportOperationId = customFaFile.setText(updated)
     } else {
       customEnglishText = updated
-      customEnFile.setText(updated)
+      pendingImportOperationId = customEnFile.setText(updated)
     }
   }
 
   function clearCustom(language) {
+    if (importInProgress) {
+      reportError("Wait for the current text import to finish before removing imported passages.")
+      return false
+    }
     if (language === "fa") {
-      if (!customPersianWritable) { reportError("Parsi imports could not be removed because their file could not be read safely."); return }
+      if (!customPersianWritable) { reportError("Parsi imports could not be removed because their file could not be read safely."); return false }
       customPersianText = ""
       customFaFile.setText("")
     } else {
-      if (!customEnglishWritable) { reportError("English imports could not be removed because their file could not be read safely."); return }
+      if (!customEnglishWritable) { reportError("English imports could not be removed because their file could not be read safely."); return false }
       customEnglishText = ""
       customEnFile.setText("")
     }
+    return true
   }
 
   property Process ensureDirsProcess: Process {
@@ -387,8 +403,9 @@ QtObject {
         root.reportError("English imported passages could not be read safely.")
       }
     }
-    onSaved: root.completeImport("en")
-    onSaveFailed: root.failCustomSave("en", "English imported passages could not be saved safely.")
+    onSaved: function(operationId) { root.completeImport("en", operationId) }
+    onSaveFailed: function(reason, operationId) { root.failCustomSave("en", operationId, "English imported passages could not be saved safely.") }
+    onSaveSuperseded: function(operationId) { root.supersedeCustomSave("en", operationId) }
   }
 
   property SafeFile customFaFileView: SafeFile {
@@ -404,8 +421,9 @@ QtObject {
         root.reportError("Parsi imported passages could not be read safely.")
       }
     }
-    onSaved: root.completeImport("fa")
-    onSaveFailed: root.failCustomSave("fa", "Parsi imported passages could not be saved safely.")
+    onSaved: function(operationId) { root.completeImport("fa", operationId) }
+    onSaveFailed: function(reason, operationId) { root.failCustomSave("fa", operationId, "Parsi imported passages could not be saved safely.") }
+    onSaveSuperseded: function(operationId) { root.supersedeCustomSave("fa", operationId) }
   }
 
   property SafeFile historyBackupFileView: SafeFile {

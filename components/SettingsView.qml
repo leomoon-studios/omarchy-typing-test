@@ -389,6 +389,7 @@ Item {
 
                 Button {
                     visible: root.store && root.store.customEnglishText !== ""
+                    enabled: root.store && !root.store.importInProgress
                     text: "English"
                     fontFamily: root.fontFamily
                     bordered: true
@@ -405,6 +406,7 @@ Item {
 
                 Button {
                     visible: root.store && root.store.customPersianText !== ""
+                    enabled: root.store && !root.store.importInProgress
                     text: "پارسی"
                     fontFamily: root.fontFamily
                     bordered: true
@@ -454,10 +456,12 @@ Item {
         }
         onConfirmed: {
             opened = false;
-            if (root.store)
-                root.store.clearCustom(root.pendingClearLanguage);
-
-            root.importStatus = "Imported passages removed.";
+            var removed = root.store && root.store.clearCustom(root.pendingClearLanguage);
+            root.importStatus = removed
+                ? "Imported passages removed."
+                : root.store && root.store.importInProgress
+                    ? "Wait for the current text import to finish before removing imported passages."
+                    : "Imported passages could not be removed.";
             root.pendingClearLanguage = "";
         }
     }

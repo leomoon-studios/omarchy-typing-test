@@ -979,12 +979,16 @@ assert.match(dataStoreSource, /ImportSafety\.validateCollection\(collection\)/u,
   "collection names must be validated before opening the file picker");
 assert.doesNotMatch(dataStoreSource, /split\(\/\\n\\s\*\\n/u,
   "imports must not eagerly split an attacker-controlled text file into an unbounded array");
-assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("en"\)/u,
-  "English imports must report success only after their custom-text file is saved");
-assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("fa"\)/u,
-  "Parsi imports must report success only after their custom-text file is saved");
+assert.match(dataStoreSource, /onSaved:\s*function\(operationId\)\s*\{\s*root\.completeImport\("en", operationId\)/u,
+  "English imports must report success only for their own completed save");
+assert.match(dataStoreSource, /onSaved:\s*function\(operationId\)\s*\{\s*root\.completeImport\("fa", operationId\)/u,
+  "Parsi imports must report success only for their own completed save");
 assert.match(dataStoreSource, /pendingImportPreviousText/u,
   "failed imported-text saves must retain enough state to roll back the active library");
+assert.match(dataStoreSource, /pendingImportOperationId\s*!==\s*operationId/u,
+  "import completion must ignore unrelated file-save signals");
+assert.match(dataStoreSource, /if \(importInProgress\)[\s\S]*?return false/u,
+  "removing imported passages must be rejected while an import is active");
 assert.match(dataStoreSource, /function matchesScope/u, "personal-best and accuracy queries must support comparison scopes");
 const safeFileSource = fs.readFileSync(path.join(root, "scripts", "safe-file.py"), "utf8");
 assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink swaps");
@@ -999,6 +1003,97 @@ assert.match(safeFileQmlSource, /write\(root\.pendingText\)[\s\S]*?stdinEnabled\
 assert.match(safeFileQmlSource, /property bool hasQueuedWrite/u, "safe writes must retain a pending update");
 assert.match(safeFileQmlSource, /queuedText\s*=\s*nextText/u, "safe writes must coalesce to the latest pending value");
 assert.match(safeFileQmlSource, /continueQueuedWrite\(\)/u, "queued safe writes must continue after the active write exits");
+assert.match(safeFileQmlSource, /signal saved\(int operationId\)/u, "safe writes must identify successful operations");
+assert.match(safeFileQmlSource, /signal saveFailed\(string reason, int operationId\)/u, "safe writes must identify failed operations");
+
+const safeFileQueueEvents = [];
+const safeFileQueueContext = vm.createContext({
+  nextOperationId: 0,
+  writer: { running: true },
+  queuedText: "",
+  queuedOperationId: 0,
+  hasQueuedWrite: false,
+  root: { saveSuperseded: operationId => safeFileQueueEvents.push(operationId) },
+  beginWrite: () => assert.fail("an active writer must queue the next value")
+});
+for (const functionName of ["allocateOperationId", "setText", "continueQueuedWrite"]) {
+  vm.runInContext(qmlFunctionSource("SafeFile.qml", functionName), safeFileQueueContext);
+}
+assert.equal(vm.runInContext('setText("first queued value")', safeFileQueueContext), 1);
+assert.equal(safeFileQueueContext.queuedOperationId, 1);
+assert.equal(vm.runInContext('setText("replacement value")', safeFileQueueContext), 2);
+assert.deepEqual(safeFileQueueEvents, [1]);
+assert.equal(safeFileQueueContext.queuedOperationId, 2);
+assert.equal(safeFileQueueContext.queuedText, "replacement value");
+
+const importCompletionEvents = [];
+const importCompletionContext = vm.createContext({
+  importInProgress: true,
+  pendingImportLanguage: "en",
+  pendingImportCollection: "Race test",
+  pendingImportCount: 2,
+  pendingImportPreviousText: "old",
+  pendingImportOperationId: 42,
+  importFinished: (count, collection) => importCompletionEvents.push({ count, collection })
+});
+for (const functionName of ["resetPendingImport", "completeImport"]) {
+  vm.runInContext(qmlFunctionSource("DataStore.qml", functionName), importCompletionContext);
+}
+vm.runInContext('completeImport("en", 41)', importCompletionContext);
+assert.equal(importCompletionContext.importInProgress, true);
+assert.deepEqual(importCompletionEvents, []);
+vm.runInContext('completeImport("en", 42)', importCompletionContext);
+assert.equal(importCompletionContext.importInProgress, false);
+assert.deepEqual(importCompletionEvents, [{ count: 2, collection: "Race test" }]);
+
+const importFailureEvents = [];
+const importFailureReports = [];
+const importFailureContext = vm.createContext({
+  importInProgress: true,
+  pendingImportLanguage: "en",
+  pendingImportCollection: "Race test",
+  pendingImportCount: 1,
+  pendingImportPreviousText: "previous English",
+  pendingImportOperationId: 72,
+  customEnglishText: "pending English",
+  customPersianText: "",
+  importFailed: message => importFailureEvents.push(message),
+  reportError: message => importFailureReports.push(message)
+});
+for (const functionName of ["resetPendingImport", "failImport", "failCustomSave"]) {
+  vm.runInContext(qmlFunctionSource("DataStore.qml", functionName), importFailureContext);
+}
+vm.runInContext('failCustomSave("en", 71, "unrelated failure")', importFailureContext);
+assert.equal(importFailureContext.importInProgress, true);
+assert.equal(importFailureContext.customEnglishText, "pending English");
+assert.deepEqual(importFailureEvents, []);
+assert.deepEqual(importFailureReports, ["unrelated failure"]);
+vm.runInContext('failCustomSave("en", 72, "matching failure")', importFailureContext);
+assert.equal(importFailureContext.importInProgress, false);
+assert.equal(importFailureContext.customEnglishText, "previous English");
+assert.deepEqual(importFailureEvents, ["matching failure"]);
+
+const clearCustomWrites = [];
+const clearCustomErrors = [];
+const clearCustomContext = vm.createContext({
+  importInProgress: true,
+  customEnglishWritable: true,
+  customPersianWritable: true,
+  customEnglishText: "saved English",
+  customPersianText: "saved Parsi",
+  customEnFile: { setText: value => clearCustomWrites.push(["en", value]) },
+  customFaFile: { setText: value => clearCustomWrites.push(["fa", value]) },
+  reportError: message => clearCustomErrors.push(message)
+});
+vm.runInContext(qmlFunctionSource("DataStore.qml", "clearCustom"), clearCustomContext);
+assert.equal(vm.runInContext('clearCustom("en")', clearCustomContext), false);
+assert.equal(clearCustomContext.customEnglishText, "saved English");
+assert.deepEqual(clearCustomWrites, []);
+assert.match(clearCustomErrors[0], /Wait for the current text import/u);
+clearCustomContext.importInProgress = false;
+assert.equal(vm.runInContext('clearCustom("en")', clearCustomContext), true);
+assert.equal(clearCustomContext.customEnglishText, "");
+assert.deepEqual(clearCustomWrites, [["en", ""]]);
 const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml"), "utf8");
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
@@ -1067,6 +1162,10 @@ for (const format of ["timed", "words", "passage"]) {
 }
 assert.match(setupViewSource, /model:\s*\[10, 25, 50, 100\]/u, "setup must expose 10, 25, 50, and 100-word tests");
 const settingsViewSource = fs.readFileSync(path.join(root, "components", "SettingsView.qml"), "utf8");
+assert.equal((settingsViewSource.match(/enabled:\s*root\.store\s*&&\s*!root\.store\.importInProgress/gu) || []).length >= 2, true,
+  "both remove-import buttons must be disabled while an import is active");
+assert.match(settingsViewSource, /var removed = root\.store && root\.store\.clearCustom/u,
+  "the removal confirmation must respect a datastore rejection");
 assert.equal(settingsViewSource.indexOf("id: settingsHeader") < settingsViewSource.indexOf("id: settingsScroll"), true,
   "Settings header must remain outside and above its scroll area");
 assert.equal(settingsViewSource.indexOf("id: settingsScroll") < settingsViewSource.indexOf("id: settingsFooter"), true,
