@@ -37,6 +37,7 @@ function qmlFunctionSource(relativePath, functionName) {
 const Normalization = qmlLibrary("js/Normalization.js");
 const Metrics = qmlLibrary("js/Metrics.js", { Normalization });
 const PassageLoader = qmlLibrary("js/PassageLoader.js");
+const ImportSafety = qmlLibrary("js/ImportSafety.js");
 const Pagination = qmlLibrary("js/Pagination.js");
 const Persistence = qmlLibrary("js/Persistence.js");
 const AdaptivePractice = qmlLibrary("js/AdaptivePractice.js", { Normalization });
@@ -44,6 +45,31 @@ const Coaching = qmlLibrary("js/Coaching.js");
 const Progress = qmlLibrary("js/Progress.js");
 const KeyboardNavigation = qmlLibrary("js/KeyboardNavigation.js");
 const KeyboardHeatmap = qmlLibrary("js/KeyboardHeatmap.js");
+
+assert.equal(ImportSafety.utf8ByteLength("abc"), 3);
+assert.equal(ImportSafety.utf8ByteLength("ش"), 2);
+assert.equal(ImportSafety.utf8ByteLength("😀"), 4);
+assert.equal(ImportSafety.validateCollection("  My passages  ").value, "My passages");
+assert.equal(ImportSafety.validateCollection("x".repeat(ImportSafety.MAX_COLLECTION_CHARACTERS + 1)).ok, false);
+
+const safeEnglishImport = ImportSafety.prepare("First passage.\n\nSecond passage.", "en", "English set", "", 123);
+assert.equal(safeEnglishImport.ok, true);
+assert.equal(safeEnglishImport.count, 2);
+const safeEnglishRows = safeEnglishImport.addition.trim().split("\n").map(line => JSON.parse(line));
+assert.deepEqual(safeEnglishRows.map(row => row.id), ["custom-en-123-1", "custom-en-123-2"]);
+assert.deepEqual(safeEnglishRows.map(row => row.text), ["First passage.", "Second passage."]);
+assert.equal(safeEnglishRows[0].collection, "English set");
+
+const safePersianImport = ImportSafety.prepare("متن نخست\n\nمتن دوم", "fa", "متن‌های من", "", 456);
+assert.equal(safePersianImport.ok, true);
+assert.equal(safePersianImport.count, 2);
+assert.equal(JSON.parse(safePersianImport.addition.split("\n")[0]).language, "fa");
+
+const excessivePassages = Array.from({ length: ImportSafety.MAX_PASSAGES + 1 }, () => "a").join("\n\n");
+assert.equal(ImportSafety.prepare(excessivePassages, "en", "Too many", "", 1).ok, false);
+assert.equal(ImportSafety.prepare("x".repeat(ImportSafety.MAX_PASSAGE_CHARACTERS + 1), "en", "Too long", "", 1).ok, false);
+assert.equal(ImportSafety.prepare("one", "en", "Full", "x".repeat(ImportSafety.MAX_SERIALIZED_BYTES), 1).ok, false);
+assert.equal(ImportSafety.prepare(" \n\n\t", "en", "Empty", "", 1).ok, false);
 
 const navigationRoot = { parent: null, name: "root" };
 const navigationFirst = { parent: navigationRoot, name: "first", focused: false };
@@ -946,6 +972,12 @@ assert.match(dataStoreSource, /history-backup\.jsonl/u, "destructive history cha
 assert.match(dataStoreSource, /history-recovery\.jsonl/u, "malformed history must create a recovery snapshot");
 assert.match(dataStoreSource, /customEnglishText\s*=\s*updated/u, "English imports must update the active passage library immediately");
 assert.match(dataStoreSource, /customPersianText\s*=\s*updated/u, "Parsi imports must update the active passage library immediately");
+assert.match(dataStoreSource, /ImportSafety\.prepare\(raw,/u,
+  "imports must pass through the bounded parser before creating passage records");
+assert.match(dataStoreSource, /ImportSafety\.validateCollection\(collection\)/u,
+  "collection names must be validated before opening the file picker");
+assert.doesNotMatch(dataStoreSource, /split\(\/\\n\\s\*\\n/u,
+  "imports must not eagerly split an attacker-controlled text file into an unbounded array");
 assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("en"\)/u,
   "English imports must report success only after their custom-text file is saved");
 assert.match(dataStoreSource, /onSaved:\s*root\.completeImport\("fa"\)/u,

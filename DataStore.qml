@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "js/ImportSafety.js" as ImportSafety
 import "js/Persistence.js" as Persistence
 
 QtObject {
@@ -227,8 +228,13 @@ QtObject {
 
   function chooseImport(language, collection) {
     if (importInProgress) return false
+    var checkedCollection = ImportSafety.validateCollection(collection)
+    if (!checkedCollection.ok) {
+      importFailed(checkedCollection.error)
+      return false
+    }
     importLanguage = language === "fa" ? "fa" : "en"
-    importCollection = String(collection || "Imported").trim() || "Imported"
+    importCollection = checkedCollection.value
     pendingPickerOutput = ""
     pickerExited = false
     pickerOutputFinished = false
@@ -290,34 +296,16 @@ QtObject {
       failImport("Imported passages were not changed because the existing custom-text file could not be read safely.")
       return
     }
-    var paragraphs = String(raw || "").replace(/\r/g, "").split(/\n\s*\n+/)
-    var records = []
-    var stamp = Date.now()
-    for (var i = 0; i < paragraphs.length; i++) {
-      var text = paragraphs[i].replace(/\s+/g, " ").trim()
-      if (!text) continue
-      records.push({
-        id: "custom-" + importLanguage + "-" + stamp + "-" + (i + 1),
-        language: importLanguage,
-        category: "custom",
-        difficulty: 2,
-        source: importCollection,
-        license: "user-provided",
-        collection: importCollection,
-        text: text
-      })
-    }
-    if (records.length === 0) {
-      failImport("The selected file did not contain any non-empty paragraphs.")
+    var previous = importLanguage === "fa" ? customPersianText : customEnglishText
+    var prepared = ImportSafety.prepare(raw, importLanguage, importCollection, previous, Date.now())
+    if (!prepared.ok) {
+      failImport(prepared.error)
       return
     }
-    var previous = importLanguage === "fa" ? customPersianText : customEnglishText
-    var addition = ""
-    for (var j = 0; j < records.length; j++) addition += JSON.stringify(records[j]) + "\n"
-    var updated = previous + addition
+    var updated = previous + prepared.addition
     pendingImportLanguage = importLanguage
-    pendingImportCollection = importCollection
-    pendingImportCount = records.length
+    pendingImportCollection = prepared.collection
+    pendingImportCount = prepared.count
     pendingImportPreviousText = previous
     if (importLanguage === "fa") {
       customPersianText = updated
