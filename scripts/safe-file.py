@@ -46,8 +46,13 @@ def read_file(path):
         os.close(fd)
 
 
-def write_file(path):
-    data = sys.stdin.buffer.read()
+def write_file(path, input_stream=None, maximum_bytes=MAX_BYTES):
+    # Read one byte past the shared ceiling so oversized writes are rejected
+    # without buffering an attacker-controlled stream or touching the target.
+    stream = input_stream if input_stream is not None else sys.stdin.buffer
+    data = stream.read(maximum_bytes + 1)
+    if len(data) > maximum_bytes:
+        return 4
     directory = os.path.dirname(path) or "."
     mode = 0o600
     fd, temporary = tempfile.mkstemp(prefix=".typing-test-", dir=directory)
@@ -77,4 +82,5 @@ def main():
         return 3
 
 
-sys.exit(main())
+if __name__ == "__main__":
+    sys.exit(main())

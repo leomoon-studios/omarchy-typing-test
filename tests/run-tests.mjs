@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -989,6 +990,9 @@ const safeFileSource = fs.readFileSync(path.join(root, "scripts", "safe-file.py"
 assert.match(safeFileSource, /O_NOFOLLOW/u, "safe file reads must reject symlink swaps");
 assert.match(safeFileSource, /os\.fstat\(fd\)/u, "safe file reads must inspect the opened descriptor");
 assert.match(safeFileSource, /MAX_BYTES/u, "safe file reads must enforce a byte limit");
+assert.match(safeFileSource, /read\(maximum_bytes \+ 1\)/u, "safe file writes must use a bounded read");
+const safeFileTests = spawnSync("python3", [path.join(root, "tests", "test-safe-file.py")], { encoding: "utf8" });
+assert.equal(safeFileTests.status, 0, safeFileTests.stderr || "safe-file tests failed");
 const safeFileQmlSource = fs.readFileSync(path.join(root, "SafeFile.qml"), "utf8");
 assert.match(safeFileQmlSource, /write\(root\.pendingText\)[\s\S]*?stdinEnabled\s*=\s*false/u,
   "safe writes must close stdin after queuing the complete payload");
