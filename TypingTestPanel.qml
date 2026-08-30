@@ -253,6 +253,7 @@ Item {
       fontFamily: root.contentFontFamily
       onStartRequested: function(options) { root.startTest(options) }
       onNavigateRequested: function(view) { root.currentView = view }
+      onDismissRequested: root.requestDismiss()
     }
   }
 

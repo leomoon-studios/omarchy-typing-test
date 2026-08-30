@@ -1119,8 +1119,8 @@ const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
 assert.match(panelSource, /"progress"/u, "panel must route to the Progress view");
-assert.equal((panelSource.match(/onDismissRequested:\s*root\.requestDismiss\(\)/gu) || []).length, 3,
-  "Settings, History, and Progress must route Escape dismissal through the panel");
+assert.equal((panelSource.match(/onDismissRequested:\s*root\.requestDismiss\(\)/gu) || []).length, 4,
+  "Setup, Settings, History, and Progress must route Escape dismissal through the panel");
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");
 assert.match(panelSource, /function comparisonForResult/u, "result pages must receive a comparison context");
 assert.match(panelSource, /onResultRequested:\s*function\(result, comparison\)/u, "Progress-to-result navigation must preserve comparison context");
@@ -1129,6 +1129,9 @@ assert.match(panelSource, /function newPassageSameSettings/u, "results must supp
 assert.match(panelSource, /currentResult\.passageIds/u, "exact retry must use the completed result's saved passage IDs");
 assert.match(panelSource, /function startDrill/u, "Progress heatmap actions must launch targeted drills");
 assert.match(panelSource, /adaptiveTargets:\s*characters/u, "heatmap drills must feed selected keys into adaptive passage selection");
+const setupEscapeViewSource = fs.readFileSync(path.join(root, "components", "SetupView.qml"), "utf8");
+assert.match(setupEscapeViewSource, /event\.key === Qt\.Key_Escape[\s\S]*?root\.dismissRequested\(\)[\s\S]*?event\.accepted = true/u,
+  "Escape must dismiss Setup");
 const testViewSource = fs.readFileSync(path.join(root, "components", "TestView.qml"), "utf8");
 assert.match(testViewSource, /schemaVersion:\s*5/u, "new results must use schema version 5");
 assert.match(testViewSource, /testType:\s*options\.testType/u, "new results must identify their test format");
@@ -1151,6 +1154,9 @@ assert.match(resultsViewSource, /text:\s*"Retry same passage"/u, "results must l
 assert.match(resultsViewSource, /text:\s*"New passage, same settings"/u, "results must keep random repeat as a separate action");
 assert.doesNotMatch(resultsViewSource, /text:\s*"Repeat"/u, "results must not retain the ambiguous Repeat action");
 assert.match(resultsViewSource, /text:\s*"DEEP ANALYSIS"/u, "results must display bigram, word, and hesitation analysis");
+assert.match(resultsViewSource,
+  /id:\s*deepAnalysisGrid[\s\S]*?uniformCellHeights:\s*true[\s\S]*?required property var modelData[\s\S]*?Layout\.fillHeight:\s*true/u,
+  "deep-analysis cards must fill equal-height grid cells");
 const historyViewSource = fs.readFileSync(path.join(root, "components", "HistoryView.qml"), "utf8");
 assert.match(historyViewSource, /if \(text === "1"\) return "Easy"/u, "history must label numeric difficulty values");
 assert.match(historyViewSource, /if \(testType === "passage"\) return "PASSAGE"/u, "history must label passage-completion results");

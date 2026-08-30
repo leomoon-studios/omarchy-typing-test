@@ -344,9 +344,12 @@ Item {
       Text { text: "DEEP ANALYSIS"; color: Color.muted; font.family: root.fontFamily; font.pixelSize: Style.font.caption; font.bold: true }
 
       GridLayout {
+        id: deepAnalysisGrid
+
         columns: width >= Style.space(760) ? 3 : 1
         columnSpacing: Style.spacing.md
         rowSpacing: Style.spacing.sm
+        uniformCellHeights: true
         Layout.fillWidth: true
 
         Repeater {
@@ -355,6 +358,7 @@ Item {
           BorderSurface {
             required property var modelData
             Layout.fillWidth: true
+            Layout.fillHeight: true
             Layout.preferredHeight: analysisContent.implicitHeight + contentTopInset + contentBottomInset
             color: Style.normalFillFor(Color.foreground, Color.accent)
             borderSpec: Border.controlSpec("normal", Color.foreground, Color.accent)
