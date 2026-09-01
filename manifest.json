@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "leomoon-studios.omarchy-typing-test",
   "name": "Omarchy Typing Test",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "LeoMoon Studios",
   "description": "A bilingual adaptive typing test with local coaching, progress charts, and difficult-character analysis.",
   "kinds": [

@@ -57,7 +57,11 @@ BarWidget {
     text: " "
     labelVisible: false
     tooltipText: "Typing Test"
-    fixedWidth: badge.width + Style.space(4)
+    // Keep the badge inside the same fixed horizontal slot as ordinary bar
+    // icons. The content-width fallback made text badges sit closer together
+    // than OpticalGlyph-based widgets.
+    fixedWidth: button.vertical ? -1 : Math.max(
+      Style.bar.iconSlot, badge.width + Style.space(4))
 
     Rectangle {
       id: badge
