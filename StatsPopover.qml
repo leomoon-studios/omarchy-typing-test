@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import qs.Commons
 import qs.Ui
 
@@ -166,6 +167,18 @@ Panel {
         focusTarget: keyCatcher
         contentWidth: fittedContentWidth(Style.space(310))
         contentHeight: fittedContentHeight(content.implicitHeight)
+
+        // Installed plugins only see their own registered click targets. Keep
+        // the physical bar outside this popup's input region so the real bar
+        // receives clicks and performs its normal one-click panel handoff.
+        mask: Region {
+            x: popover.barPos === "left" ? popover.barW : 0
+            y: popover.barPos === "top" ? popover.barH : 0
+            width: Math.max(0, popover.screenW
+                - ((popover.barPos === "left" || popover.barPos === "right") ? popover.barW : 0))
+            height: Math.max(0, popover.screenH
+                - ((popover.barPos === "top" || popover.barPos === "bottom") ? popover.barH : 0))
+        }
 
         Item {
             id: keyCatcher
