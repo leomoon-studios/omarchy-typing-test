@@ -172,12 +172,18 @@ Panel {
         // the physical bar outside this popup's input region so the real bar
         // receives clicks and performs its normal one-click panel handoff.
         mask: Region {
-            x: popover.barPos === "left" ? popover.barThickness : 0
-            y: popover.barPos === "top" ? popover.barThickness : 0
-            width: Math.max(0, popover.screenW
-                - ((popover.barPos === "left" || popover.barPos === "right") ? popover.barThickness : 0))
-            height: Math.max(0, popover.screenH
-                - ((popover.barPos === "top" || popover.barPos === "bottom") ? popover.barThickness : 0))
+            width: popover.screenW
+            height: popover.screenH
+
+            Region {
+                intersection: Intersection.Subtract
+                x: popover.barPos === "right" ? popover.screenW - popover.barThickness : 0
+                y: popover.barPos === "bottom" ? popover.screenH - popover.barThickness : 0
+                width: (popover.barPos === "left" || popover.barPos === "right")
+                    ? popover.barThickness : popover.screenW
+                height: (popover.barPos === "top" || popover.barPos === "bottom")
+                    ? popover.barThickness : popover.screenH
+            }
         }
 
         Item {
