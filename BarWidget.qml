@@ -19,6 +19,7 @@ BarWidget {
   readonly property bool popoutSwitchClosing: popoverLoader.item ? popoverLoader.item.popoutSwitchClosing === true : false
   readonly property real openPanelIndicatorWidth: badge.width
   readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))
+  property string pendingPanelView: "setup"
 
   function open() { if (popoverLoader.item) popoverLoader.item.open() }
   function close() { if (popoverLoader.item) popoverLoader.item.close() }
@@ -26,12 +27,26 @@ BarWidget {
   function refresh() { if (popoverLoader.item) popoverLoader.item.refresh() }
   function closeForPopoutSwitch() { if (popoverLoader.item) popoverLoader.item.closeForPopoutSwitch() }
 
+  function openPanel(viewName) {
+    pendingPanelView = String(viewName || "setup")
+    close()
+    if (panelLoader.item) {
+      panelLoader.item.open(JSON.stringify({ view: pendingPanelView }))
+    } else {
+      panelLoader.active = true
+    }
+  }
+
   function injectPopover() {
     var target = popoverLoader.item
     if (!target) return
     target.bar = root.bar
     target.anchorItem = button
     target.hostWidget = root
+  }
+
+  function injectPanel() {
+    if (panelLoader.item) panelLoader.item.anchorItem = button
   }
 
   implicitWidth: button.implicitWidth
@@ -46,6 +61,17 @@ BarWidget {
     onLoaded: {
       root.injectPopover()
       Qt.callLater(root.injectPopover)
+    }
+  }
+
+  Loader {
+    id: panelLoader
+    active: false
+    source: Qt.resolvedUrl("TypingTestPanel.qml")
+    visible: false
+    onLoaded: {
+      root.injectPanel()
+      item.open(JSON.stringify({ view: root.pendingPanelView }))
     }
   }
 

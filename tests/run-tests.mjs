@@ -964,7 +964,7 @@ assert.equal(Progress.metricPoints(largeRows, "netWpm", 120).length, 120);
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 assert.equal(manifest.id, "leomoon-studios.omarchy-typing-test");
 assert.equal(manifest.version, "1.0.1");
-assert.deepEqual(manifest.kinds, ["bar-widget", "panel"]);
+assert.deepEqual(manifest.kinds, ["bar-widget"]);
 for (const entryPoint of Object.values(manifest.entryPoints)) {
   assert.equal(fs.existsSync(path.join(root, entryPoint)), true, `missing entry point ${entryPoint}`);
 }
@@ -985,6 +985,11 @@ assert.doesNotMatch(barWidgetSource, /showLatestWpm|latestWpmText/u, "bar widget
 assert.match(barWidgetSource, /text:\s*"WPM"/u, "bar widget must use the WPM monogram");
 assert.match(barWidgetSource, /id:\s*badge/u, "WPM monogram must retain its badge outline");
 assert.equal(manifest.barWidget.schema, undefined, "icon-only widget should not expose obsolete settings");
+assert.match(barWidgetSource,
+  /function openPanel[\s\S]*?panelLoader\.item\.open\(JSON\.stringify\(\{ view: pendingPanelView \}\)\)/u,
+  "the bar widget must own launching the full typing panel");
+assert.match(barWidgetSource, /id:\s*panelLoader[\s\S]*?active:\s*false/u,
+  "the full typing panel must stay lazy until selected from the menu");
 const dataStoreSource = fs.readFileSync(path.join(root, "DataStore.qml"), "utf8");
 assert.match(dataStoreSource, /onSaveFailed/u, "persistence writes must surface failures");
 assert.doesNotMatch(dataStoreSource, /FileView\s*\{/u, "persistent data must not use unbounded FileView reads");
@@ -1119,12 +1124,12 @@ const passageLibrarySource = fs.readFileSync(path.join(root, "PassageLibrary.qml
 assert.match(passageLibrarySource, /failedCount === 0/u, "corpus readiness must reject failed collections");
 const panelSource = fs.readFileSync(path.join(root, "TypingTestPanel.qml"), "utf8");
 assert.match(panelSource, /"progress"/u, "panel must route to the Progress view");
-assert.match(panelSource,
-  /function toggleBarMenu[\s\S]*?shell\.bar\.findPanelWidget\(pluginId\)[\s\S]*?widget\.toggle\(\)/u,
-  "the panel entry point must be able to toggle its bar menu");
-assert.match(panelSource,
-  /\(rawPayload === "" \|\| rawPayload === "\{\}"\) && toggleBarMenu\(\)/u,
-  "empty numbered-shortcut payloads must open the bar menu instead of Setup");
+assert.doesNotMatch(panelSource, /toggleBarMenu/u,
+  "the full typing panel must not intercept numbered bar shortcuts");
+const statsPopoverSource = fs.readFileSync(path.join(root, "StatsPopover.qml"), "utf8");
+assert.match(statsPopoverSource,
+  /root\.hostWidget\.openPanel\(viewName \|\| "setup"\)/u,
+  "the statistics menu must launch the full panel through its bar widget");
 assert.equal((panelSource.match(/onDismissRequested:\s*root\.requestDismiss\(\)/gu) || []).length, 4,
   "Setup, Settings, History, and Progress must route Escape dismissal through the panel");
 assert.match(panelSource, /startAdaptive/u, "panel must support adaptive recommendations");

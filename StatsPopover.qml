@@ -135,10 +135,8 @@ Panel {
     function openPanel(viewName) {
         close();
         Qt.callLater(function() {
-            if (root.bar && root.bar.shell && typeof root.bar.shell.summon === "function")
-                root.bar.shell.summon(root.moduleName, JSON.stringify({
-                    "view": viewName || "setup"
-                }));
+            if (root.hostWidget && typeof root.hostWidget.openPanel === "function")
+                root.hostWidget.openPanel(viewName || "setup");
 
         });
     }

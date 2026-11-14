@@ -11,8 +11,7 @@ import "js/Progress.js" as Progress
 Item {
   id: root
 
-  property var shell: null
-  property var manifest: null
+  property var anchorItem: null
   property bool opened: false
   property string currentView: "setup"
   property var activeOptions: ({})
@@ -21,34 +20,18 @@ Item {
   property var progressComparison: null
   property string confirmationAction: ""
 
-  readonly property string pluginId: "leomoon-studios.omarchy-typing-test"
   readonly property string contentFontFamily: bundledFont.name !== ""
     ? bundledFont.name
     : Style.font.family
-  readonly property string pluginDir: manifest && manifest.__sourceDir
-    ? String(manifest.__sourceDir)
-    : String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
+  readonly property string pluginDir: String(Qt.resolvedUrl(".")).replace(/^file:\/\//, "").replace(/\/$/, "")
 
   FontLoader {
     id: bundledFont
     source: Qt.resolvedUrl("assets/fonts/Vazirmatn-Regular.ttf")
   }
 
-  function toggleBarMenu() {
-    var widget = shell && shell.bar && typeof shell.bar.findPanelWidget === "function"
-      ? shell.bar.findPanelWidget(pluginId)
-      : null
-    if (!widget || typeof widget.toggle !== "function") return false
-    widget.toggle()
-    return true
-  }
-
   function open(payloadJson) {
     var rawPayload = String(payloadJson || "").trim()
-    // Numbered bar shortcuts use an empty payload. Keep that activation
-    // equivalent to pressing the WPM bar icon instead of skipping its menu.
-    if ((rawPayload === "" || rawPayload === "{}") && toggleBarMenu()) return
-
     var payload = {}
     try { payload = JSON.parse(rawPayload || "{}") || {} } catch (error) {}
     var requested = String(payload.view || "setup")
@@ -65,8 +48,7 @@ Item {
   }
 
   function dismiss() {
-    if (shell && typeof shell.hide === "function") shell.hide((manifest && manifest.id) || pluginId)
-    else close()
+    close()
   }
 
   function requestDismiss() {
@@ -342,6 +324,8 @@ Item {
 
   PanelWindow {
     id: panel
+    screen: root.anchorItem && root.anchorItem.QsWindow.window
+      ? root.anchorItem.QsWindow.window.screen : null
     // A portal file chooser is a normal desktop window, so this overlay-layer
     // surface must get out of its way while the chooser is open.
     visible: root.opened && !dataStore.importPickerActive

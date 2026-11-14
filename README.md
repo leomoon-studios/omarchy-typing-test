@@ -95,6 +95,8 @@ timed and word-count tests.
 The popout is keyboard navigable: use the arrow keys to select an action,
 `Enter` or `Space` to open it, and `Escape` to close the popout.
 
+The numbered bar shortcut opens this same popout. For example, when Typing Test is the second panel in the bar's right section, press `Super+Ctrl+2`.
+
 Setup, History, Progress, and Settings are also keyboard navigable. Arrow keys
 move between controls, `Enter` or `Space` activates the focused control, and
 all confirmation dialogs support arrow selection, `Enter`/`Space`, and `Escape`.
@@ -123,13 +125,7 @@ Keyboard controls during a test:
 - `Enter`/`Space`: activate the selected confirmation action
 - `Escape`: close, with confirmation after typing has begun
 
-The centered panel can also be opened directly:
-
-```bash
-omarchy-shell shell summon leomoon-studios.omarchy-typing-test '{"view":"setup"}'
-```
-
-Supported views are `setup`, `progress`, `history`, and `settings`.
+Choose Start Test, Progress, History, or Settings from the popout to open the corresponding view in the centered panel.
 
 ## Local Data
 
